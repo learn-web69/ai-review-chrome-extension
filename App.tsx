@@ -42,7 +42,7 @@ interface WalkthroughStep {
 
 // --- CONSTANTS ---
 const MODEL_NAME = "gemini-2.5-flash-native-audio-preview-09-2025";
-const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. IMPORTANT: The user must be viewing a GitHub PR page for comment features to work. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks to comment on a specific line of code (e.g., "Please comment here that it's better to use async/await"), you MUST use the "addPRComment" tool with the line number and your suggested comment text. The comment will be inserted into the GitHub PR comment dialog, ready for user approval. IMPORTANT: After using the "addPRComment" tool, do NOT say anything about adding a comment. Just silently use the tool. Do NOT mention that you created a comment or that the dialog opened. After using the "highlightWalkthroughStep" tool, do NOT mention that you've highlighted or navigated to a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. If you can't see the code clearly, ask the user to scroll or adjust their screen. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
+const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. IMPORTANT: The user must be viewing a GitHub PR page for comment features to work. When the user asks to navigate to a specific step (e.g., "go to step 1", "proceed to step 3", "show step 2"), you MUST use the "selectStep" tool with the step number to navigate there. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks to comment on a specific line of code (e.g., "Please comment here that it's better to use async/await"), you MUST use the "addPRComment" tool with the line number and your suggested comment text. The comment will be inserted into the GitHub PR comment dialog, ready for user approval. IMPORTANT: After using the "addPRComment" tool, do NOT say anything about adding a comment. Just silently use the tool. Do NOT mention that you created a comment or that the dialog opened. After using the "highlightWalkthroughStep" or "selectStep" tools, do NOT mention that you've highlighted or navigated to a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. If you can't see the code clearly, ask the user to scroll or adjust their screen. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
 const FRAME_RATE = 5;
 const JPEG_QUALITY = 0.8;
 
@@ -117,6 +117,23 @@ const addPRCommentFunctionDeclaration: FunctionDeclaration = {
       },
     },
     required: ["lineNumber", "commentText"],
+  },
+};
+
+const selectStepFunctionDeclaration: FunctionDeclaration = {
+  name: "selectStep",
+  description:
+    "Navigates to and highlights a specific step in the code review walkthrough by its step number. Use this when the user asks to 'go to step X', 'proceed to step X', 'show step X', or similar navigation commands.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      stepNumber: {
+        type: Type.NUMBER,
+        description:
+          "The step number (1-indexed) that the user wants to navigate to. For example, if the user says 'go to step 1', pass 1. If they say 'go to step 3', pass 3.",
+      },
+    },
+    required: ["stepNumber"],
   },
 };
 
@@ -244,8 +261,18 @@ const WalkthroughStepItem: React.FC<{
   onClick: () => void;
 }> = ({ step, index, isExpanded, isActive, onClick }) => {
   const handleClick = () => {
+    console.log(
+      `[WalkthroughStepItem] Clicked step ${step.id} - ${step.title}`
+    );
     onClick();
   };
+
+  // Debug logging when props change
+  React.useEffect(() => {
+    console.log(
+      `[WalkthroughStepItem] Step ${step.id} - isActive: ${isActive}, isExpanded: ${isExpanded}`
+    );
+  }, [isActive, isExpanded, step.id]);
 
   return (
     <div
@@ -475,6 +502,15 @@ const App: React.FC = () => {
   const nextStartTimeRef = useRef(0);
   const audioSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const activateStepRef = useRef<((stepId: number) => void) | null>(null);
+  const walkthroughStepsRef = useRef<WalkthroughStep[]>([]);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    walkthroughStepsRef.current = walkthroughSteps;
+    console.log(
+      `[useEffect] Updated walkthroughStepsRef.current, length: ${walkthroughSteps.length}`
+    );
+  }, [walkthroughSteps]);
 
   // Check for API key on mount
   useEffect(() => {
@@ -565,9 +601,15 @@ const App: React.FC = () => {
   };
 
   const handleSelectStep = (step: WalkthroughStep) => {
+    console.log(`[handleSelectStep] Selecting step ${step.id} - ${step.title}`);
+
     // Highlight and expand the step
     setActiveStepId(step.id);
     setExpandedStepId(step.id);
+
+    console.log(
+      `[handleSelectStep] State updated - activeStepId: ${step.id}, expandedStepId: ${step.id}`
+    );
 
     // Navigate to the URL if present
     if (step.url) {
@@ -849,6 +891,7 @@ const App: React.FC = () => {
               logCodeContextFunctionDeclaration,
               highlightWalkthroughStepFunctionDeclaration,
               addPRCommentFunctionDeclaration,
+              selectStepFunctionDeclaration,
             ],
           },
         ],
@@ -908,13 +951,31 @@ const App: React.FC = () => {
                 });
               } else if (fc.name === "highlightWalkthroughStep") {
                 const stepId = fc.args?.stepId as number;
+                console.log(
+                  `[highlightWalkthroughStep Tool] Called with stepId: ${stepId}`
+                );
+                console.log(
+                  `[highlightWalkthroughStep Tool] Current walkthroughSteps:`,
+                  walkthroughStepsRef.current.map((s) => ({
+                    id: s.id,
+                    title: s.title,
+                  }))
+                );
+
                 if (typeof stepId === "number") {
-                  console.log(`AI is highlighting step ${stepId}`);
+                  console.log(
+                    `[highlightWalkthroughStep Tool] AI is highlighting step ${stepId}`
+                  );
 
                   // Find the step and use the shared handler
-                  const step = walkthroughSteps.find((s) => s.id === stepId);
+                  const step = walkthroughStepsRef.current.find(
+                    (s) => s.id === stepId
+                  );
 
                   if (step) {
+                    console.log(
+                      `[highlightWalkthroughStep Tool] Found step: ${step.title} (ID: ${step.id})`
+                    );
                     // Use the same logic as when clicking on a step
                     handleSelectStep(step);
 
@@ -1122,6 +1183,78 @@ const App: React.FC = () => {
                     name: fc.name,
                     response: {
                       result: "Invalid parameters for adding comment.",
+                    },
+                  });
+                }
+              } else if (fc.name === "selectStep") {
+                const stepNumber = fc.args?.stepNumber as number;
+                console.log(
+                  `[selectStep Tool] Called with stepNumber: ${stepNumber}`
+                );
+                console.log(
+                  `[selectStep Tool] Current walkthroughSteps length: ${walkthroughStepsRef.current.length}`
+                );
+
+                if (typeof stepNumber === "number" && stepNumber >= 1) {
+                  console.log(
+                    `[selectStep Tool] AI is navigating to step ${stepNumber}`
+                  );
+
+                  // Convert 1-indexed step number to 0-indexed array index
+                  const stepIndex = stepNumber - 1;
+
+                  // Find the step by index
+                  if (
+                    stepIndex >= 0 &&
+                    stepIndex < walkthroughStepsRef.current.length
+                  ) {
+                    const step = walkthroughStepsRef.current[stepIndex];
+                    console.log(
+                      `[selectStep Tool] Found step at index ${stepIndex}: ${step.title} (ID: ${step.id})`
+                    );
+
+                    // Use the same logic as when clicking on a step
+                    handleSelectStep(step);
+
+                    // Create a promise to wait for navigation to complete
+                    const navigationPromise = new Promise<void>((resolve) => {
+                      // Add a small delay to ensure state updates and navigation complete
+                      setTimeout(() => resolve(), 800);
+                    });
+
+                    // Wait for navigation, then send the response
+                    navigationPromise.then(() => {
+                      const response = {
+                        id: fc.id!,
+                        name: fc.name,
+                        response: {
+                          result: ``,
+                        },
+                      };
+
+                      sessionPromise.then((session) =>
+                        (session as unknown as LiveSession).sendToolResponse({
+                          functionResponses: [response],
+                        })
+                      );
+                    });
+                  } else {
+                    // Step not found, add to regular responses
+                    functionResponses.push({
+                      id: fc.id!,
+                      name: fc.name,
+                      response: {
+                        result: `Step ${stepNumber} not found. There are only ${walkthroughStepsRef.current.length} steps available.`,
+                      },
+                    });
+                  }
+                } else {
+                  functionResponses.push({
+                    id: fc.id!,
+                    name: fc.name,
+                    response: {
+                      result:
+                        "Invalid step number. Please provide a valid step number starting from 1.",
                     },
                   });
                 }
