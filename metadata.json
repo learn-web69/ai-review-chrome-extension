@@ -1,0 +1,8 @@
+{
+  "name": "Copy of AI Code Review Companion",
+  "description": "An AI-powered companion that uses real-time screen sharing and voice communication to help you with code reviews. Share your screen, ask questions about the code, and get instant explanations and suggestions from Gemini.",
+  "requestFramePermissions": [
+    "microphone",
+    "display-capture"
+  ]
+}
