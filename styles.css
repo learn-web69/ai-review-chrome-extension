@@ -597,3 +597,19 @@ svg {
 ::-webkit-scrollbar-thumb:hover {
   background: rgb(107, 114, 128);
 }
+
+/* Animation for toast notifications */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}

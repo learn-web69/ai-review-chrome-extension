@@ -42,7 +42,7 @@ interface WalkthroughStep {
 
 // --- CONSTANTS ---
 const MODEL_NAME = "gemini-2.5-flash-native-audio-preview-09-2025";
-const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. IMPORTANT: After using the "highlightWalkthroughStep" tool, do NOT mention that you've highlighted or navigated to a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. If you can't see the code clearly, ask the user to scroll or adjust their screen. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
+const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. IMPORTANT: The user must be viewing a GitHub PR page for comment features to work. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks to comment on a specific line of code (e.g., "Please comment here that it's better to use async/await"), you MUST use the "addPRComment" tool with the line number and your suggested comment text. The comment will be inserted into the GitHub PR comment dialog, ready for user approval. IMPORTANT: After using the "addPRComment" tool, do NOT say anything about adding a comment. Just silently use the tool. Do NOT mention that you created a comment or that the dialog opened. After using the "highlightWalkthroughStep" tool, do NOT mention that you've highlighted or navigated to a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. If you can't see the code clearly, ask the user to scroll or adjust their screen. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
 const FRAME_RATE = 5;
 const JPEG_QUALITY = 0.8;
 
@@ -91,6 +91,32 @@ const highlightWalkthroughStepFunctionDeclaration: FunctionDeclaration = {
       },
     },
     required: ["stepId"],
+  },
+};
+
+const addPRCommentFunctionDeclaration: FunctionDeclaration = {
+  name: "addPRComment",
+  description:
+    "Adds a comment to a specific line in the GitHub PR. Opens the comment dialog with the AI-generated comment text, ready for user approval. Use this when the user asks to add a comment to a specific line of code.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      lineNumber: {
+        type: Type.NUMBER,
+        description:
+          "The line number where the comment should be added in the PR.",
+      },
+      fileName: {
+        type: Type.STRING,
+        description: "The name of the file being commented on.",
+      },
+      commentText: {
+        type: Type.STRING,
+        description:
+          "The comment text to insert into the PR comment dialog. This should be a clear, concise code review suggestion.",
+      },
+    },
+    required: ["lineNumber", "commentText"],
   },
 };
 
@@ -329,6 +355,26 @@ const WalkthroughDisplay: React.FC<{
   );
 };
 
+const Toast: React.FC<{
+  message: string;
+  type: "success" | "error" | "info";
+}> = ({ message, type }) => {
+  const bgColor =
+    type === "success"
+      ? "bg-green-600"
+      : type === "error"
+      ? "bg-red-600"
+      : "bg-blue-600";
+
+  return (
+    <div
+      className={`${bgColor} text-white px-4 py-3 rounded-lg shadow-lg animate-fade-in`}
+    >
+      <p className="text-sm font-medium">{message}</p>
+    </div>
+  );
+};
+
 const TranscriptionLog: React.FC<{
   messages: TranscriptionMessage[];
   currentUserInput: string;
@@ -412,6 +458,10 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [hasStoredApiKey, setHasStoredApiKey] = useState(false);
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+  } | null>(null);
 
   // --- REFS ---
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -798,6 +848,7 @@ const App: React.FC = () => {
             functionDeclarations: [
               logCodeContextFunctionDeclaration,
               highlightWalkthroughStepFunctionDeclaration,
+              addPRCommentFunctionDeclaration,
             ],
           },
         ],
@@ -899,6 +950,157 @@ const App: React.FC = () => {
                       },
                     });
                   }
+                }
+              } else if (fc.name === "addPRComment") {
+                const lineNumber = fc.args?.lineNumber as number;
+                const commentText = fc.args?.commentText as string;
+                const fileName = fc.args?.fileName as string | undefined;
+
+                if (
+                  typeof lineNumber === "number" &&
+                  typeof commentText === "string"
+                ) {
+                  console.log(
+                    `AI is adding PR comment at line ${lineNumber}:`,
+                    commentText
+                  );
+
+                  // Send message to content script to add the comment
+                  chrome.tabs.query(
+                    { active: true, currentWindow: true },
+                    (tabs) => {
+                      if (!tabs[0]?.id) {
+                        console.error("[App] No active tab found");
+                        setNotification({
+                          message:
+                            "Failed: No active GitHub tab found. Make sure you're on a GitHub PR page.",
+                          type: "error",
+                        });
+                        setTimeout(() => setNotification(null), 4000);
+                        const result = {
+                          id: fc.id!,
+                          name: fc.name,
+                          response: {
+                            result:
+                              "Failed to add comment: No active tab found. Make sure you are on a GitHub PR page.",
+                          },
+                        };
+                        sessionPromise.then((session) =>
+                          (session as unknown as LiveSession).sendToolResponse({
+                            functionResponses: [result],
+                          })
+                        );
+                        return;
+                      }
+
+                      console.log(
+                        `[App] Sending ADD_PR_COMMENT to tab ${tabs[0].id}, line ${lineNumber}`
+                      );
+
+                      chrome.tabs.sendMessage(
+                        tabs[0].id,
+                        {
+                          type: "ADD_PR_COMMENT",
+                          lineNumber,
+                          commentText,
+                          fileName,
+                        },
+                        (response) => {
+                          // Check for runtime errors first
+                          if (chrome.runtime.lastError) {
+                            console.error(
+                              "[App] Runtime error:",
+                              chrome.runtime.lastError.message
+                            );
+                            const errorMsg = chrome.runtime.lastError.message;
+                            setNotification({
+                              message: `Failed to add comment: ${errorMsg}. Make sure you're on a GitHub PR page.`,
+                              type: "error",
+                            });
+                            setTimeout(() => setNotification(null), 4000);
+                            const result = {
+                              id: fc.id!,
+                              name: fc.name,
+                              response: {
+                                result: `Failed to add comment: ${errorMsg}. The content script may not be loaded on this page.`,
+                              },
+                            };
+                            sessionPromise.then((session) =>
+                              (
+                                session as unknown as LiveSession
+                              ).sendToolResponse({
+                                functionResponses: [result],
+                              })
+                            );
+                            return;
+                          }
+
+                          if (response?.success) {
+                            console.log(
+                              "[App] Comment dialog opened successfully"
+                            );
+                            setNotification({
+                              message:
+                                "Comment added to line. Ready for your approval!",
+                              type: "success",
+                            });
+                            setTimeout(() => setNotification(null), 3000);
+                            const result = {
+                              id: fc.id!,
+                              name: fc.name,
+                              response: {
+                                result:
+                                  "Comment added to PR. Please review and confirm.",
+                              },
+                            };
+                            sessionPromise.then((session) =>
+                              (
+                                session as unknown as LiveSession
+                              ).sendToolResponse({
+                                functionResponses: [result],
+                              })
+                            );
+                          } else {
+                            console.error(
+                              "[App] Failed to add comment:",
+                              response?.error
+                            );
+                            setNotification({
+                              message: `Failed to add comment: ${
+                                response?.error || "Unknown error"
+                              }`,
+                              type: "error",
+                            });
+                            setTimeout(() => setNotification(null), 4000);
+                            const result = {
+                              id: fc.id!,
+                              name: fc.name,
+                              response: {
+                                result: `Failed to add comment: ${
+                                  response?.error || "Unknown error"
+                                }`,
+                              },
+                            };
+                            sessionPromise.then((session) =>
+                              (
+                                session as unknown as LiveSession
+                              ).sendToolResponse({
+                                functionResponses: [result],
+                              })
+                            );
+                          }
+                        }
+                      );
+                    }
+                  );
+                } else {
+                  functionResponses.push({
+                    id: fc.id!,
+                    name: fc.name,
+                    response: {
+                      result: "Invalid parameters for adding comment.",
+                    },
+                  });
                 }
               }
             }
@@ -1324,6 +1526,11 @@ const App: React.FC = () => {
         onApiKeyChange={setApiKeyInput}
         onSave={handleSaveApiKey}
       />
+      {notification && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <Toast message={notification.message} type={notification.type} />
+        </div>
+      )}
     </div>
   );
 };
