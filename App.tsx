@@ -36,11 +36,13 @@ interface WalkthroughStep {
   file: string;
   lines: string;
   codeSnippet: string;
+  url?: string;
+  lineNumber?: number;
 }
 
 // --- CONSTANTS ---
 const MODEL_NAME = "gemini-2.5-flash-native-audio-preview-09-2025";
-const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. If you can't see the code clearly, ask the user to scroll or adjust their screen. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
+const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. IMPORTANT: After using the "highlightWalkthroughStep" tool, do NOT mention that you've highlighted or navigated to a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. If you can't see the code clearly, ask the user to scroll or adjust their screen. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
 const FRAME_RATE = 5;
 const JPEG_QUALITY = 0.8;
 
@@ -215,6 +217,10 @@ const WalkthroughStepItem: React.FC<{
   isActive: boolean;
   onClick: () => void;
 }> = ({ step, index, isExpanded, isActive, onClick }) => {
+  const handleClick = () => {
+    onClick();
+  };
+
   return (
     <div
       className={`bg-gray-800/50 rounded-lg border border-gray-700/50 transition-all duration-300 ${
@@ -224,7 +230,7 @@ const WalkthroughStepItem: React.FC<{
       }`}
     >
       <div
-        onClick={onClick}
+        onClick={handleClick}
         className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-700/30 rounded-t-lg"
       >
         <div className="flex items-start gap-3">
@@ -264,6 +270,16 @@ const WalkthroughStepItem: React.FC<{
               </code>
             </pre>
           </div>
+          {step.url && (
+            <a
+              href={step.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block mt-3 text-xs text-blue-400 hover:text-blue-300 underline"
+            >
+              View on GitHub →
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -273,13 +289,19 @@ const WalkthroughStepItem: React.FC<{
 const WalkthroughDisplay: React.FC<{
   steps: WalkthroughStep[];
   activeStepId: number | null;
-  onActivate: (id: number) => void;
-}> = ({ steps, activeStepId, onActivate }) => {
-  const [expandedStepId, setExpandedStepId] = useState<number | null>(null);
-
-  const handleStepClick = (stepId: number) => {
-    onActivate(stepId);
-    setExpandedStepId((currentId) => (currentId === stepId ? null : stepId));
+  expandedStepId: number | null;
+  onSelectStep: (step: WalkthroughStep) => void;
+  onExpandChange: (id: number | null) => void;
+}> = ({
+  steps,
+  activeStepId,
+  expandedStepId,
+  onSelectStep,
+  onExpandChange,
+}) => {
+  const handleStepClick = (step: WalkthroughStep) => {
+    onSelectStep(step);
+    onExpandChange(expandedStepId === step.id ? null : step.id);
   };
 
   return (
@@ -295,7 +317,7 @@ const WalkthroughDisplay: React.FC<{
             index={index + 1}
             isExpanded={expandedStepId === step.id}
             isActive={activeStepId === step.id}
-            onClick={() => handleStepClick(step.id)}
+            onClick={() => handleStepClick(step)}
           />
         ))
       ) : (
@@ -379,6 +401,7 @@ const App: React.FC = () => {
     []
   );
   const [activeStepId, setActiveStepId] = useState<number | null>(null);
+  const [expandedStepId, setExpandedStepId] = useState<number | null>(null);
   const [isInterrupting, setIsInterrupting] = useState(false);
   const [transcriptionMessages, setTranscriptionMessages] = useState<
     TranscriptionMessage[]
@@ -401,6 +424,7 @@ const App: React.FC = () => {
   const outputAudioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef(0);
   const audioSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const activateStepRef = useRef<((stepId: number) => void) | null>(null);
 
   // Check for API key on mount
   useEffect(() => {
@@ -454,34 +478,65 @@ const App: React.FC = () => {
           title: "Optimize State Management",
           description:
             "The component re-renders frequently. Consider using `useCallback` or `React.memo` to optimize performance by memoizing functions and components.",
-          file: "src/components/UserList.tsx",
-          lines: "45-52",
+          file: "react.dev",
+          lines: "3",
           codeSnippet:
             "const memoizedCallback = useCallback(\n  () => {\n    doSomething(a, b);\n  },\n  [a, b],\n);",
+          url: "https://github.com/reactjs/react.dev/pull/5619/files#diff-b5c4538e49b3838bc814b118fbc878796ed95a9b0ab60da6de7f2380e98f68cbR3",
+          lineNumber: 3,
         },
         {
           id: 2,
           title: "Improve Accessibility",
           description:
             "The button element is missing an `aria-label` for screen readers. Add a descriptive label to ensure it's accessible for all users.",
-          file: "src/components/common/Button.tsx",
-          lines: "12",
+          file: "react.dev",
+          lines: "58",
           codeSnippet: '<button aria-label="Close dialog">\n  X\n</button>',
+          url: "https://github.com/reactjs/react.dev/pull/5619/files#diff-2d3f2d78d4bc514e1c26e749e35cc007f81675f6001557c69014c0a814eeb1a3R58",
+          lineNumber: 58,
         },
         {
           id: 3,
           title: "Security Vulnerability",
           description:
             "Using `dangerouslySetInnerHTML` can expose the app to XSS attacks. Sanitize the HTML before rendering it to prevent malicious script injection.",
-          file: "src/utils/parser.ts",
-          lines: "88",
+          file: "react.dev",
+          lines: "5291",
           codeSnippet:
             "import DOMPurify from 'dompurify';\n\nconst cleanHTML = DOMPurify.sanitize(dirtyHTML);",
+          url: "https://github.com/reactjs/react.dev/pull/5619/files#diff-497aef6f7279cfffd57f811db53afe9fcf6a0ab284c343c2ff98e9fc7e633b79R5291",
+          lineNumber: 5291,
         },
       ];
       setWalkthroughSteps(fakeData);
       setRepoStatus(RepoStatus.WALKTHROUGH_READY);
     }, 2000); // Simulate API call
+  };
+
+  const handleSelectStep = (step: WalkthroughStep) => {
+    // Highlight and expand the step
+    setActiveStepId(step.id);
+    setExpandedStepId(step.id);
+
+    // Navigate to the URL if present
+    if (step.url) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0]?.id) {
+          console.log(`[App] Navigating to URL: ${step.url}`);
+          chrome.tabs.update(tabs[0].id, { url: step.url }, () => {
+            if (chrome.runtime.lastError) {
+              console.error(
+                `[App] Error navigating:`,
+                chrome.runtime.lastError
+              );
+            } else {
+              console.log(`[App] Successfully navigated to URL`);
+            }
+          });
+        }
+      });
+    }
   };
 
   const stopLiveConnection = useCallback((options: { error?: string } = {}) => {
@@ -788,6 +843,7 @@ const App: React.FC = () => {
               name: string;
               response: object;
             }[] = [];
+
             for (const fc of message.toolCall.functionCalls) {
               if (fc.name === "logCodeContext") {
                 console.log(
@@ -802,18 +858,52 @@ const App: React.FC = () => {
               } else if (fc.name === "highlightWalkthroughStep") {
                 const stepId = fc.args?.stepId as number;
                 if (typeof stepId === "number") {
-                  setActiveStepId(stepId);
                   console.log(`AI is highlighting step ${stepId}`);
-                  functionResponses.push({
-                    id: fc.id!,
-                    name: fc.name,
-                    response: {
-                      result: `Step ${stepId} successfully highlighted.`,
-                    },
-                  });
+
+                  // Find the step and use the shared handler
+                  const step = walkthroughSteps.find((s) => s.id === stepId);
+
+                  if (step) {
+                    // Use the same logic as when clicking on a step
+                    handleSelectStep(step);
+
+                    // Create a promise to wait for navigation to complete
+                    const navigationPromise = new Promise<void>((resolve) => {
+                      // Add a small delay to ensure state updates and navigation complete
+                      setTimeout(() => resolve(), 800);
+                    });
+
+                    // Wait for navigation, then send the response
+                    navigationPromise.then(() => {
+                      const response = {
+                        id: fc.id!,
+                        name: fc.name,
+                        response: {
+                          result: ``,
+                        },
+                      };
+
+                      sessionPromise.then((session) =>
+                        (session as unknown as LiveSession).sendToolResponse({
+                          functionResponses: [response],
+                        })
+                      );
+                    });
+                  } else {
+                    // Step not found, add to regular responses
+                    functionResponses.push({
+                      id: fc.id!,
+                      name: fc.name,
+                      response: {
+                        result: `Step not found.`,
+                      },
+                    });
+                  }
                 }
               }
             }
+
+            // Send immediate responses (for non-highlight or highlight without URL)
             if (functionResponses.length > 0) {
               sessionPromise.then((session) =>
                 (session as unknown as LiveSession).sendToolResponse({
@@ -1009,7 +1099,9 @@ const App: React.FC = () => {
         <WalkthroughDisplay
           steps={walkthroughSteps}
           activeStepId={activeStepId}
-          onActivate={setActiveStepId}
+          expandedStepId={expandedStepId}
+          onSelectStep={handleSelectStep}
+          onExpandChange={setExpandedStepId}
         />
       ) : (
         <div className="flex-grow flex flex-col items-center justify-center text-center p-4">
@@ -1160,7 +1252,9 @@ const App: React.FC = () => {
             <WalkthroughDisplay
               steps={walkthroughSteps}
               activeStepId={activeStepId}
-              onActivate={setActiveStepId}
+              expandedStepId={expandedStepId}
+              onSelectStep={handleSelectStep}
+              onExpandChange={setExpandedStepId}
             />
             <div className="flex-shrink-0 p-4 border-t border-gray-700/50">
               <button
