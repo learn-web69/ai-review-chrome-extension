@@ -558,12 +558,15 @@ const App: React.FC = () => {
     setLiveStatus(LiveStatus.CONNECTING);
 
     try {
+      console.log("[Live Session] Starting live connection...");
+
       if (
         !inputAudioContextRef.current ||
         inputAudioContextRef.current.state === "closed"
       ) {
         inputAudioContextRef.current = new (window.AudioContext ||
           (window as any).webkitAudioContext)({ sampleRate: 16000 });
+        console.log("[Live Session] Created input audio context with 16000 Hz");
       }
       if (
         !outputAudioContextRef.current ||
@@ -571,20 +574,37 @@ const App: React.FC = () => {
       ) {
         outputAudioContextRef.current = new (window.AudioContext ||
           (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        console.log(
+          "[Live Session] Created output audio context with 24000 Hz"
+        );
       }
       if (outputAudioContextRef.current.state === "suspended")
         await outputAudioContextRef.current.resume();
       if (inputAudioContextRef.current.state === "suspended")
         await inputAudioContextRef.current.resume();
+      console.log("[Live Session] Audio contexts initialized and resumed");
 
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+      // Request display media - let user choose tab to share
+      // This is the simplest and most reliable approach
+      console.log(
+        "[Live Session] Requesting display media (user will choose what to share)..."
+      );
+      const videoStream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           frameRate: { ideal: FRAME_RATE, max: FRAME_RATE },
           width: { ideal: 1280 },
           height: { ideal: 720 },
-        },
+          cursor: "always",
+        } as any,
         audio: false,
       });
+      console.log("[Live Session] Display media acquired successfully");
+      console.log(
+        "[Live Session] Video track info:",
+        videoStream.getVideoTracks()[0]?.getSettings?.()
+      );
+
+      console.log("[Live Session] Requesting microphone audio...");
       const audioStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 16000,
@@ -595,20 +615,35 @@ const App: React.FC = () => {
         },
         video: false,
       });
-      displayStream.getVideoTracks()[0].onended = () => stopLiveConnection();
+      console.log(
+        "[Live Session] Microphone audio acquired, audio track info:",
+        audioStream.getAudioTracks()[0]?.getSettings?.()
+      );
+
+      videoStream.getVideoTracks()[0].onended = () => {
+        console.log("[Live Session] Video track ended, stopping connection");
+        stopLiveConnection();
+      };
 
       mediaStreamRef.current = new MediaStream([
-        ...displayStream.getVideoTracks(),
+        ...videoStream.getVideoTracks(),
         ...audioStream.getAudioTracks(),
       ]);
+      console.log("[Live Session] Combined media streams created");
 
-      if (videoRef.current) videoRef.current.srcObject = displayStream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = videoStream;
+        console.log("[Live Session] Video stream set to video element");
+      }
 
-      connectToGemini(audioStream, displayStream.getVideoTracks()[0]);
+      console.log("[Live Session] Connecting to Gemini...");
+      connectToGemini(audioStream, videoStream.getVideoTracks()[0]);
     } catch (e: any) {
       const message = `Failed to start session: ${
         e.message || "Could not get media devices."
       }`;
+      console.error("[Live Session] Error:", e);
+      console.error("[Live Session] Error message:", message);
       stopLiveConnection({ error: message });
     }
   }, [liveStatus, stopLiveConnection]);
@@ -667,16 +702,20 @@ const App: React.FC = () => {
     audioStream: MediaStream,
     videoTrack: MediaStreamTrack
   ) => {
+    console.log("[Gemini Connection] Starting Gemini connection...");
     const apiKey = await getApiKey();
     if (!apiKey) {
+      console.error("[Gemini Connection] No API key found");
       stopLiveConnection({
         error:
           "No API key found. Please configure your Gemini API key in settings.",
       });
       return;
     }
+    console.log("[Gemini Connection] API key found");
 
     const ai = new GoogleGenAI({ apiKey });
+    console.log("[Gemini Connection] GoogleGenAI instance created");
 
     const createPcmBlob = (data: Float32Array): GoogleGenAIBlob => {
       const l = data.length;
@@ -710,8 +749,10 @@ const App: React.FC = () => {
       },
       callbacks: {
         onopen: () => {
+          console.log("[Gemini Connection] Connection opened successfully");
           setRepoStatus(RepoStatus.LIVE_CONNECTED);
           setLiveStatus(LiveStatus.CONNECTED);
+          console.log("[Gemini Connection] Starting video frame streaming...");
           streamVideoFrames(
             videoTrack,
             sessionPromise as unknown as Promise<LiveSession>
@@ -847,20 +888,26 @@ const App: React.FC = () => {
           }
         },
         onerror: (e: ErrorEvent) => {
+          console.error("[Gemini Connection] Connection error:", e);
           stopLiveConnection({
             error: e.message || "A connection error occurred.",
           });
         },
         onclose: () => {
+          console.log("[Gemini Connection] Connection closed");
           stopLiveConnection();
         },
       },
     });
     sessionPromise
       .then((session) => {
+        console.log(
+          "[Gemini Connection] Session promise resolved, session established"
+        );
         sessionRef.current = session as unknown as LiveSession;
       })
       .catch((e) => {
+        console.error("[Gemini Connection] Session promise rejected:", e);
         const message = `Failed to connect: ${
           e.message || "Please check your API key and network."
         }`;

@@ -15,7 +15,9 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           sidepanel: resolve(__dirname, "sidepanel.html"),
+          permissions: resolve(__dirname, "permissions.html"),
           background: resolve(__dirname, "background.ts"),
+          "content-script": resolve(__dirname, "content-script.ts"),
         },
         output: {
           entryFileNames: (chunkInfo) => {
@@ -24,7 +26,12 @@ export default defineConfig(({ mode }) => {
               : "[name].js";
           },
           chunkFileNames: "chunks/[name]-[hash].js",
-          assetFileNames: "assets/[name]-[hash].[ext]",
+          assetFileNames: (assetInfo) => {
+            if (assetInfo.name === "styles.css") {
+              return "styles.css";
+            }
+            return "assets/[name]-[hash].[ext]";
+          },
         },
       },
       outDir: "dist",
