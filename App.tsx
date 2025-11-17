@@ -997,40 +997,58 @@ const App: React.FC = () => {
                         `[App] Sending ADD_PR_COMMENT to tab ${tabs[0].id}, line ${lineNumber}`
                       );
 
-                      chrome.tabs.sendMessage(
-                        tabs[0].id,
-                        {
-                          type: "ADD_PR_COMMENT",
-                          lineNumber,
-                          commentText,
-                          fileName,
-                        },
-                        (response) => {
+                      // Helper function to send message with retry logic
+                      const sendMessageWithRetry = (
+                        tabId: number,
+                        message: any,
+                        retries = 1
+                      ) => {
+                        chrome.tabs.sendMessage(tabId, message, (response) => {
                           // Check for runtime errors first
                           if (chrome.runtime.lastError) {
-                            console.error(
-                              "[App] Runtime error:",
-                              chrome.runtime.lastError.message
-                            );
                             const errorMsg = chrome.runtime.lastError.message;
-                            setNotification({
-                              message: `Failed to add comment: ${errorMsg}. Make sure you're on a GitHub PR page.`,
-                              type: "error",
-                            });
-                            setTimeout(() => setNotification(null), 4000);
-                            const result = {
-                              id: fc.id!,
-                              name: fc.name,
-                              response: {
-                                result: `Failed to add comment: ${errorMsg}. The content script may not be loaded on this page.`,
-                              },
-                            };
-                            sessionPromise.then((session) =>
-                              (
-                                session as unknown as LiveSession
-                              ).sendToolResponse({
-                                functionResponses: [result],
-                              })
+                            console.error("[App] Runtime error:", errorMsg);
+
+                            // If content script not loaded, try to inject it and retry
+                            if (
+                              errorMsg.includes(
+                                "Receiving end does not exist"
+                              ) &&
+                              retries > 0
+                            ) {
+                              console.log(
+                                "[App] Content script not loaded, attempting to inject..."
+                              );
+                              chrome.scripting.executeScript(
+                                {
+                                  target: { tabId },
+                                  files: ["content-script.js"],
+                                },
+                                () => {
+                                  if (chrome.runtime.lastError) {
+                                    console.error(
+                                      "[App] Failed to inject script:",
+                                      chrome.runtime.lastError.message
+                                    );
+                                    handleCommentError(
+                                      `Failed to add comment: Script injection failed. ${chrome.runtime.lastError.message}`
+                                    );
+                                  } else {
+                                    console.log(
+                                      "[App] Content script injected, retrying message..."
+                                    );
+                                    // Wait a moment for script to initialize
+                                    setTimeout(() => {
+                                      sendMessageWithRetry(tabId, message, 0);
+                                    }, 100);
+                                  }
+                                }
+                              );
+                              return;
+                            }
+
+                            handleCommentError(
+                              `Failed to add comment: ${errorMsg}. Make sure you're on a GitHub PR page.`
                             );
                             return;
                           }
@@ -1061,36 +1079,41 @@ const App: React.FC = () => {
                               })
                             );
                           } else {
-                            console.error(
-                              "[App] Failed to add comment:",
-                              response?.error
-                            );
-                            setNotification({
-                              message: `Failed to add comment: ${
-                                response?.error || "Unknown error"
-                              }`,
-                              type: "error",
-                            });
-                            setTimeout(() => setNotification(null), 4000);
-                            const result = {
-                              id: fc.id!,
-                              name: fc.name,
-                              response: {
-                                result: `Failed to add comment: ${
-                                  response?.error || "Unknown error"
-                                }`,
-                              },
-                            };
-                            sessionPromise.then((session) =>
-                              (
-                                session as unknown as LiveSession
-                              ).sendToolResponse({
-                                functionResponses: [result],
-                              })
+                            handleCommentError(
+                              response?.error || "Unknown error"
                             );
                           }
-                        }
-                      );
+                        });
+                      };
+
+                      // Helper to handle comment errors
+                      const handleCommentError = (errorMsg: string) => {
+                        console.error("[App] Failed to add comment:", errorMsg);
+                        setNotification({
+                          message: `Failed to add comment: ${errorMsg}`,
+                          type: "error",
+                        });
+                        setTimeout(() => setNotification(null), 4000);
+                        const result = {
+                          id: fc.id!,
+                          name: fc.name,
+                          response: {
+                            result: `Failed to add comment: ${errorMsg}`,
+                          },
+                        };
+                        sessionPromise.then((session) =>
+                          (session as unknown as LiveSession).sendToolResponse({
+                            functionResponses: [result],
+                          })
+                        );
+                      };
+
+                      sendMessageWithRetry(tabs[0].id, {
+                        type: "ADD_PR_COMMENT",
+                        lineNumber,
+                        commentText,
+                        fileName,
+                      });
                     }
                   );
                 } else {
