@@ -613,3 +613,53 @@ svg {
 .animate-fade-in {
   animation: fadeIn 0.3s ease-in-out;
 }
+
+/* Animation for soundwave indicator */
+@keyframes soundwave {
+  0%,
+  100% {
+    height: 8px;
+  }
+  50% {
+    height: 20px;
+  }
+}
+
+.soundwave-bar {
+  transition: all 0.3s ease;
+}
+
+.soundwave-bar.user-speaking {
+  background-color: #facc15;
+  animation: soundwave 0.8s ease-in-out infinite;
+}
+
+.soundwave-bar.ai-speaking {
+  background-color: #60a5fa;
+  animation: soundwave 0.8s ease-in-out infinite;
+}
+
+/* Pulsing ring indicator for active speaking */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+}
+
+.status-pulse-ring {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  animation: pulse-ring 1.5s ease-in-out infinite;
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.5);
+}

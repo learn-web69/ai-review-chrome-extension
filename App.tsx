@@ -42,7 +42,7 @@ interface WalkthroughStep {
 
 // --- CONSTANTS ---
 const MODEL_NAME = "gemini-2.5-flash-native-audio-preview-09-2025";
-const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. IMPORTANT: The user must be viewing a GitHub PR page for comment features to work. When the user asks to navigate to a specific step (e.g., "go to step 1", "proceed to step 3", "show step 2"), you MUST use the "selectStep" tool with the step number to navigate there. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks to comment on a specific line of code (e.g., "Please comment here that it's better to use async/await"), you MUST use the "addPRComment" tool with the line number and your suggested comment text. The comment will be inserted into the GitHub PR comment dialog, ready for user approval. IMPORTANT: After using the "addPRComment" tool, do NOT say anything about adding a comment. Just silently use the tool. Do NOT mention that you created a comment or that the dialog opened. After using the "highlightWalkthroughStep" or "selectStep" tools, do NOT mention that you've highlighted or navigated to a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. If you can't see the code clearly, ask the user to scroll or adjust their screen. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
+const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. IMPORTANT: The user must be viewing a GitHub PR page for comment features to work. When the user asks to navigate to a specific step (e.g., "go to step 1", "proceed to step 3", "show step 2"), you MUST use the "selectStep" tool with the step number to navigate there. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks to comment on a specific line of code (e.g., "Please comment here that it's better to use async/await"), you MUST use the "addPRComment" tool with the line number and your suggested comment text. The comment will be inserted into the GitHub PR comment dialog, ready for user approval. IMPORTANT: After using the "addPRComment" tool, do NOT say anything about adding a comment. Just silently use the tool. Do NOT mention that you created a comment or that the dialog opened. After using the "highlightWalkthroughStep" or "selectStep" tools, do NOT mention that you've highlighted or navigated to a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. Once you have successfully answered a question based on what you can see, do NOT second-guess yourself or ask to scroll unless the user asks a NEW question about code that is clearly not visible. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
 const FRAME_RATE = 5;
 const JPEG_QUALITY = 0.8;
 
@@ -160,7 +160,7 @@ const Header: React.FC<{ onSettingsClick: () => void; hasApiKey: boolean }> = ({
     </div>
     <button
       onClick={onSettingsClick}
-      className="flex-shrink-0 p-2 hover:bg-gray-700 rounded-lg transition-colors relative"
+      className="flex-shrink-0 p-2 text-white bg-gray-600 hover:bg-gray-700 rounded-lg transition-colors relative"
       title="Settings"
     >
       {!hasApiKey && (
@@ -168,7 +168,7 @@ const Header: React.FC<{ onSettingsClick: () => void; hasApiKey: boolean }> = ({
       )}
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        className="h-5 w-5 text-gray-400"
+        className="h-5 w-5"
         viewBox="0 0 20 20"
         fill="currentColor"
       >
@@ -402,6 +402,119 @@ const Toast: React.FC<{
   );
 };
 
+const AITalkingIndicator: React.FC<{
+  isAISpeaking: boolean;
+  isUserSpeaking: boolean;
+  onExpandClick: () => void;
+}> = ({ isAISpeaking, isUserSpeaking, onExpandClick }) => {
+  const getStatus = () => {
+    if (isAISpeaking) return { text: "AI Speaking", color: "text-blue-400" };
+    if (isUserSpeaking) return { text: "Listening", color: "text-yellow-400" };
+    return { text: "Ready", color: "text-green-400" };
+  };
+
+  const status = getStatus();
+
+  return (
+    <div className="flex items-center justify-between bg-gray-800 rounded-lg p-3 border border-gray-700">
+      <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-1">
+          {[...Array(4)].map((_, i) => (
+            <div
+              key={i}
+              className={`w-1 bg-gray-600 rounded-full soundwave-bar ${
+                isAISpeaking
+                  ? "ai-speaking"
+                  : isUserSpeaking
+                  ? "user-speaking"
+                  : ""
+              }`}
+              style={{
+                height: isAISpeaking || isUserSpeaking ? "20px" : "8px",
+                animationDelay: `${i * 0.1}s`,
+              }}
+            />
+          ))}
+        </div>
+        <div className="flex items-center space-x-2">
+          {(isAISpeaking || isUserSpeaking) && (
+            <div className="status-pulse-ring"></div>
+          )}
+          <span className={`text-sm font-medium ${status.color}`}>
+            {status.text}
+          </span>
+        </div>
+      </div>
+      <button
+        onClick={onExpandClick}
+        className="bg-gradient-to-br bg-gray-600 from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white p-2 rounded-lg transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+        title="View full conversation"
+      >
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+          />
+        </svg>
+      </button>
+    </div>
+  );
+};
+
+const ExpandableDialogueModal: React.FC<{
+  isOpen: boolean;
+  messages: TranscriptionMessage[];
+  currentUserInput: string;
+  currentModelOutput: string;
+  onClose: () => void;
+}> = ({ isOpen, messages, currentUserInput, currentModelOutput, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black z-50 flex flex-col">
+      <div className="bg-gray-900 w-full h-full flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+          <h2 className="text-xl font-bold text-white">Conversation</h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+            title="Close"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6 text-gray-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+        <div className="flex-grow overflow-hidden p-4">
+          <TranscriptionLog
+            messages={messages}
+            currentUserInput={currentUserInput}
+            currentModelOutput={currentModelOutput}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const TranscriptionLog: React.FC<{
   messages: TranscriptionMessage[];
   currentUserInput: string;
@@ -489,6 +602,9 @@ const App: React.FC = () => {
     message: string;
     type: "success" | "error" | "info";
   } | null>(null);
+  const [isDialogueExpanded, setIsDialogueExpanded] = useState(false);
+  const [isAISpeaking, setIsAISpeaking] = useState(false);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
   // --- REFS ---
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -554,6 +670,13 @@ const App: React.FC = () => {
       }
     };
   }, [repoStatus]);
+
+  // Auto-close modal when session ends
+  useEffect(() => {
+    if (liveStatus === LiveStatus.IDLE && isDialogueExpanded) {
+      setIsDialogueExpanded(false);
+    }
+  }, [liveStatus, isDialogueExpanded]);
 
   const handleGenerateWalkthrough = () => {
     setRepoStatus(RepoStatus.GENERATING_WALKTHROUGH);
@@ -693,6 +816,9 @@ const App: React.FC = () => {
     setTranscriptionMessages([]);
     setCurrentUserInput("");
     setCurrentModelOutput("");
+    setIsDialogueExpanded(false);
+    setIsAISpeaking(false);
+    setIsUserSpeaking(false);
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
@@ -1274,11 +1400,17 @@ const App: React.FC = () => {
             setCurrentModelOutput(
               (prev) => prev + message.serverContent!.outputTranscription!.text
             );
+            setIsAISpeaking(true);
+            setIsUserSpeaking(false);
           } else if (message.serverContent?.inputTranscription) {
             setCurrentUserInput(
               (prev) => prev + message.serverContent!.inputTranscription!.text
             );
+            setIsUserSpeaking(true);
+            setIsAISpeaking(false);
           } else if (message.serverContent?.turnComplete) {
+            setIsAISpeaking(false);
+            setIsUserSpeaking(false);
             setCurrentUserInput((prevInput) => {
               setCurrentModelOutput((prevOutput) => {
                 const newMessages: TranscriptionMessage[] = [];
@@ -1294,8 +1426,26 @@ const App: React.FC = () => {
                     author: "model",
                     text: prevOutput.trim(),
                   });
-                if (newMessages.length > 0)
-                  setTranscriptionMessages((msgs) => [...msgs, ...newMessages]);
+                if (newMessages.length > 0) {
+                  setTranscriptionMessages((msgs) => {
+                    // Check if we already have these exact messages at the end
+                    const shouldAdd = newMessages.some((newMsg, idx) => {
+                      const correspondingMsg =
+                        msgs[msgs.length - newMessages.length + idx];
+                      return (
+                        !correspondingMsg ||
+                        correspondingMsg.author !== newMsg.author ||
+                        correspondingMsg.text !== newMsg.text
+                      );
+                    });
+
+                    if (shouldAdd) {
+                      return [...msgs, ...newMessages];
+                    }
+                    console.log("[Gemini] Skipping duplicate messages");
+                    return msgs;
+                  });
+                }
                 return "";
               });
               return "";
@@ -1605,31 +1755,54 @@ const App: React.FC = () => {
 
     if (isLive) {
       return (
-        <div className="flex h-full">
-          <aside className="w-[450px] flex-shrink-0 border-r border-gray-700/50 flex flex-col bg-gray-950">
-            <WalkthroughDisplay
-              steps={walkthroughSteps}
-              activeStepId={activeStepId}
-              expandedStepId={expandedStepId}
-              onSelectStep={handleSelectStep}
-              onExpandChange={setExpandedStepId}
-            />
-            <div className="flex-shrink-0 p-4 border-t border-gray-700/50">
-              <button
-                onClick={handleGenerateWalkthrough}
-                disabled={repoStatus === RepoStatus.GENERATING_WALKTHROUGH}
-                className="w-full flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-lg transition-colors"
-              >
-                {repoStatus === RepoStatus.GENERATING_WALKTHROUGH
-                  ? "Generating..."
-                  : "Regenerate Walkthrough"}
-              </button>
+        <>
+          <div className="flex flex-col h-full">
+            {/* Hidden video and canvas for screen capture */}
+            <video ref={videoRef} autoPlay muted className="hidden" />
+            <canvas ref={canvasRef} className="hidden" />
+
+            <div className="flex-grow flex flex-col min-h-0">
+              <WalkthroughDisplay
+                steps={walkthroughSteps}
+                activeStepId={activeStepId}
+                expandedStepId={expandedStepId}
+                onSelectStep={handleSelectStep}
+                onExpandChange={setExpandedStepId}
+              />
             </div>
-          </aside>
-          <main className="flex-grow flex flex-col">
-            {renderLiveSessionView()}
-          </main>
-        </div>
+            <div className="flex-shrink-0 p-4 border-t border-gray-700/50 bg-gray-950 space-y-3">
+              <AITalkingIndicator
+                isAISpeaking={isAISpeaking}
+                isUserSpeaking={isUserSpeaking}
+                onExpandClick={() => setIsDialogueExpanded(true)}
+              />
+              <div className="flex items-center justify-center space-x-2">
+                <button
+                  onClick={() => stopLiveConnection()}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-all text-sm"
+                  title="Stop Session"
+                >
+                  Stop Session
+                </button>
+                <button
+                  onClick={handleInterrupt}
+                  className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-all disabled:opacity-50 text-sm"
+                  disabled={isInterrupting}
+                  title={isInterrupting ? "Wait..." : "Interrupt AI"}
+                >
+                  {isInterrupting ? "Wait..." : "Interrupt"}
+                </button>
+              </div>
+            </div>
+          </div>
+          <ExpandableDialogueModal
+            isOpen={isDialogueExpanded}
+            messages={transcriptionMessages}
+            currentUserInput={currentUserInput}
+            currentModelOutput={currentModelOutput}
+            onClose={() => setIsDialogueExpanded(false)}
+          />
+        </>
       );
     }
 
