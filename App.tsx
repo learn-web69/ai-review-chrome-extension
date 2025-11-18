@@ -736,7 +736,9 @@ const App: React.FC = () => {
 
         // DEBUG MODE: Force UNINITIALIZED but with real repo URL and metadata
         if (DEBUG_SHOW_INIT_SCREEN) {
-          console.log("[App] DEBUG MODE: Forcing UNINITIALIZED status with real repo");
+          console.log(
+            "[App] DEBUG MODE: Forcing UNINITIALIZED status with real repo"
+          );
           const status = await checkRepoStatus(repoUrl);
           console.log("[App] DEBUG MODE: Got repo status:", status);
           setCurrentRepoId(status.repo_id);
@@ -975,7 +977,9 @@ const App: React.FC = () => {
     });
     audioSourcesRef.current.clear();
     nextStartTimeRef.current = 0;
-    console.log("[🛑 stopLiveConnection] ✅ All audio sources stopped and cleared");
+    console.log(
+      "[🛑 stopLiveConnection] ✅ All audio sources stopped and cleared"
+    );
 
     if (
       inputAudioContextRef.current &&
@@ -986,9 +990,14 @@ const App: React.FC = () => {
       );
       try {
         inputAudioContextRef.current.close();
-        console.log("[🛑 stopLiveConnection] ✅ Input context closed successfully");
+        console.log(
+          "[🛑 stopLiveConnection] ✅ Input context closed successfully"
+        );
       } catch (err) {
-        console.error("[🛑 stopLiveConnection] Error closing input context:", err);
+        console.error(
+          "[🛑 stopLiveConnection] Error closing input context:",
+          err
+        );
       }
     } else {
       console.log(
@@ -1007,9 +1016,14 @@ const App: React.FC = () => {
       );
       try {
         outputAudioContextRef.current.close();
-        console.log("[🛑 stopLiveConnection] ✅ Output context closed successfully");
+        console.log(
+          "[🛑 stopLiveConnection] ✅ Output context closed successfully"
+        );
       } catch (err) {
-        console.error("[🛑 stopLiveConnection] Error closing output context:", err);
+        console.error(
+          "[🛑 stopLiveConnection] Error closing output context:",
+          err
+        );
       }
     } else {
       console.log(
@@ -1065,10 +1079,14 @@ const App: React.FC = () => {
       console.log("[🎬 startLiveConnection] 🟢 Starting live connection...");
 
       console.log(
-        `[🎬 startLiveConnection] 📊 INPUT context state: ${inputAudioContextRef.current?.state || "null"}`
+        `[🎬 startLiveConnection] 📊 INPUT context state: ${
+          inputAudioContextRef.current?.state || "null"
+        }`
       );
       console.log(
-        `[🎬 startLiveConnection] 📊 OUTPUT context state: ${outputAudioContextRef.current?.state || "null"}`
+        `[🎬 startLiveConnection] 📊 OUTPUT context state: ${
+          outputAudioContextRef.current?.state || "null"
+        }`
       );
 
       if (
@@ -1146,18 +1164,31 @@ const App: React.FC = () => {
 
       // WORKAROUND: Play a silent buffer to unlock audio playback on second+ sessions
       // Chrome requires user interaction or a prior play action to allow Web Audio output
-      if (outputAudioContextRef.current && outputAudioContextRef.current.state === "running") {
+      if (
+        outputAudioContextRef.current &&
+        outputAudioContextRef.current.state === "running"
+      ) {
         try {
-          console.log("[🎬 startLiveConnection] 🔓 Playing silent buffer to unlock audio playback...");
-          const silentBuffer = outputAudioContextRef.current.createBuffer(1, 44100, outputAudioContextRef.current.sampleRate);
-          const silentSource = outputAudioContextRef.current.createBufferSource();
+          console.log(
+            "[🎬 startLiveConnection] 🔓 Playing silent buffer to unlock audio playback..."
+          );
+          const silentBuffer = outputAudioContextRef.current.createBuffer(
+            1,
+            44100,
+            outputAudioContextRef.current.sampleRate
+          );
+          const silentSource =
+            outputAudioContextRef.current.createBufferSource();
           silentSource.buffer = silentBuffer;
           silentSource.connect(outputAudioContextRef.current.destination);
           silentSource.start(0);
           silentSource.stop(0.001); // Stop immediately - just unlock audio
           console.log("[🎬 startLiveConnection] ✅ Silent buffer played");
         } catch (e) {
-          console.warn("[🎬 startLiveConnection] ⚠️ Could not play silent buffer:", e);
+          console.warn(
+            "[🎬 startLiveConnection] ⚠️ Could not play silent buffer:",
+            e
+          );
         }
       }
 
@@ -1333,15 +1364,21 @@ const App: React.FC = () => {
             "[🔗 Gemini Connection] 🟢 Connection opened successfully"
           );
           console.log(
-            `[🔗 Gemini Connection] 📊 Input context state: ${inputAudioContextRef.current?.state || "null"}`
+            `[🔗 Gemini Connection] 📊 Input context state: ${
+              inputAudioContextRef.current?.state || "null"
+            }`
           );
           console.log(
-            `[🔗 Gemini Connection] 📊 Output context state: ${outputAudioContextRef.current?.state || "null"}`
+            `[🔗 Gemini Connection] 📊 Output context state: ${
+              outputAudioContextRef.current?.state || "null"
+            }`
           );
 
           setRepoStatus(RepoStatus.LIVE_CONNECTED);
           setLiveStatus(LiveStatus.CONNECTED);
-          console.log("[🔗 Gemini Connection] 🎥 Starting video frame streaming...");
+          console.log(
+            "[🔗 Gemini Connection] 🎥 Starting video frame streaming..."
+          );
           streamVideoFrames(
             videoTrack,
             sessionPromise as unknown as Promise<LiveSession>
@@ -1381,7 +1418,10 @@ const App: React.FC = () => {
         },
         onmessage: async (message: LiveServerMessage) => {
           if (message.toolCall) {
-            console.log("[Tool Call] AI called tools:", message.toolCall.functionCalls.map(fc => fc.name).join(", "));
+            console.log(
+              "[Tool Call] AI called tools:",
+              message.toolCall.functionCalls.map((fc) => fc.name).join(", ")
+            );
             const functionResponses: {
               id: string;
               name: string;
@@ -1427,31 +1467,26 @@ const App: React.FC = () => {
                     console.log(
                       `[highlightWalkthroughStep Tool] Found step: ${step.title} (ID: ${step.id})`
                     );
+                    console.log(
+                      `[highlightWalkthroughStep Tool] Step description: ${step.description}`
+                    );
                     // Use the same logic as when clicking on a step
                     handleSelectStep(step);
 
-                    // Create a promise to wait for navigation to complete
-                    const navigationPromise = new Promise<void>((resolve) => {
-                      // Add a small delay to ensure state updates and navigation complete
-                      setTimeout(() => resolve(), 800);
-                    });
-
-                    // Wait for navigation, then send the response
-                    navigationPromise.then(() => {
-                      const response = {
-                        id: fc.id!,
-                        name: fc.name,
-                        response: {
-                          result: ``,
-                        },
-                      };
-
-                      sessionPromise.then((session) =>
-                        (session as unknown as LiveSession).sendToolResponse({
-                          functionResponses: [response],
-                        })
-                      );
-                    });
+                    // Add response to batch immediately (don't delay)
+                    // This ensures AI gets the description and can read it
+                    const response = {
+                      id: fc.id!,
+                      name: fc.name,
+                      response: {
+                        result: `${step.title}\n\n${step.description}`,
+                      },
+                    };
+                    console.log(
+                      `[highlightWalkthroughStep Tool] 📤 Adding response to batch:`,
+                      response.response.result.substring(0, 100)
+                    );
+                    functionResponses.push(response);
                   } else {
                     // Step not found, add to regular responses
                     functionResponses.push({
@@ -1663,32 +1698,27 @@ const App: React.FC = () => {
                     console.log(
                       `[selectStep Tool] Found step at index ${stepIndex}: ${step.title} (ID: ${step.id})`
                     );
+                    console.log(
+                      `[selectStep Tool] Step description: ${step.description}`
+                    );
 
                     // Use the same logic as when clicking on a step
                     handleSelectStep(step);
 
-                    // Create a promise to wait for navigation to complete
-                    const navigationPromise = new Promise<void>((resolve) => {
-                      // Add a small delay to ensure state updates and navigation complete
-                      setTimeout(() => resolve(), 800);
-                    });
-
-                    // Wait for navigation, then send the response
-                    navigationPromise.then(() => {
-                      const response = {
-                        id: fc.id!,
-                        name: fc.name,
-                        response: {
-                          result: `Step ${stepNumber}: ${step.title}\n\n${step.description}`,
-                        },
-                      };
-
-                      sessionPromise.then((session) =>
-                        (session as unknown as LiveSession).sendToolResponse({
-                          functionResponses: [response],
-                        })
-                      );
-                    });
+                    // Add response to batch immediately (don't delay)
+                    // This ensures AI gets the description and can read it
+                    const response = {
+                      id: fc.id!,
+                      name: fc.name,
+                      response: {
+                        result: `Step ${stepNumber}: ${step.title}\n\n${step.description}`,
+                      },
+                    };
+                    console.log(
+                      `[selectStep Tool] 📤 Adding response to batch:`,
+                      response.response.result.substring(0, 100)
+                    );
+                    functionResponses.push(response);
                   } else {
                     // Step not found, add to regular responses
                     functionResponses.push({
@@ -1710,7 +1740,9 @@ const App: React.FC = () => {
                   });
                 }
               } else if (fc.name === "answerCodeQuestion") {
-                console.log("[answerCodeQuestion] 🔧 TOOL CALLED - AI is calling answerCodeQuestion tool");
+                console.log(
+                  "[answerCodeQuestion] 🔧 TOOL CALLED - AI is calling answerCodeQuestion tool"
+                );
                 const question = fc.args?.question as string;
                 const code = fc.args?.code as string | undefined;
                 const file = fc.args?.file as string | undefined;
@@ -1746,7 +1778,9 @@ const App: React.FC = () => {
                     );
                     const result = await answerCodeQuestion(request);
                     console.log(
-                      `[answerCodeQuestion Tool] ✅ Got API response with answer length: ${result.answer?.length || 0} chars`
+                      `[answerCodeQuestion Tool] ✅ Got API response with answer length: ${
+                        result.answer?.length || 0
+                      } chars`
                     );
                     console.log(
                       `[answerCodeQuestion Tool] 🎯 Answer preview:`,
@@ -1756,7 +1790,9 @@ const App: React.FC = () => {
                       `[answerCodeQuestion Tool] 📋 FULL TOOL ANSWER:\n${result.answer}`
                     );
                     console.log(
-                      `[answerCodeQuestion Tool] Confidence: ${result.confidence}, Sources: ${result.sources?.length || 0}`
+                      `[answerCodeQuestion Tool] Confidence: ${
+                        result.confidence
+                      }, Sources: ${result.sources?.length || 0}`
                     );
 
                     // Send the response back to the AI immediately
@@ -1811,7 +1847,9 @@ const App: React.FC = () => {
               }
             }
 
-            console.log(`[Tool Call] ✅ All tools processed. Total responses: ${functionResponses.length}`);
+            console.log(
+              `[Tool Call] ✅ All tools processed. Total responses: ${functionResponses.length}`
+            );
 
             // Send immediate responses (for non-highlight or highlight without URL)
             if (functionResponses.length > 0) {
@@ -1887,14 +1925,22 @@ const App: React.FC = () => {
               );
               const outputCtx = outputAudioContextRef.current;
               console.log(
-                `[🔊 Audio Playback] 🎧 Output context state: ${outputCtx.state}, currentTime: ${outputCtx.currentTime.toFixed(3)}, baseLatency: ${outputCtx.baseLatency.toFixed(3)}`
+                `[🔊 Audio Playback] 🎧 Output context state: ${
+                  outputCtx.state
+                }, currentTime: ${outputCtx.currentTime.toFixed(
+                  3
+                )}, baseLatency: ${outputCtx.baseLatency.toFixed(3)}`
               );
 
               if (outputCtx.state === "suspended") {
-                console.log("[🔊 Audio Playback] 📢 Output context suspended, resuming...");
+                console.log(
+                  "[🔊 Audio Playback] 📢 Output context suspended, resuming..."
+                );
                 await outputCtx.resume();
                 console.log(
-                  `[🔊 Audio Playback] ✅ Output context resumed (state: ${outputCtx.state}, currentTime: ${outputCtx.currentTime.toFixed(3)})`
+                  `[🔊 Audio Playback] ✅ Output context resumed (state: ${
+                    outputCtx.state
+                  }, currentTime: ${outputCtx.currentTime.toFixed(3)})`
                 );
               }
 
@@ -1925,7 +1971,9 @@ const App: React.FC = () => {
               const currentTime = outputCtx.currentTime;
               const startTime = Math.max(currentTime, nextStartTimeRef.current);
               console.log(
-                `[🔊 Audio Playback] 🎵 Creating buffer source - currentTime: ${currentTime.toFixed(3)}, startTime: ${startTime.toFixed(3)}`
+                `[🔊 Audio Playback] 🎵 Creating buffer source - currentTime: ${currentTime.toFixed(
+                  3
+                )}, startTime: ${startTime.toFixed(3)}`
               );
 
               const source = outputCtx.createBufferSource();
@@ -1942,12 +1990,16 @@ const App: React.FC = () => {
 
               source.start(startTime);
               console.log(
-                `[🔊 Audio Playback] ▶️ Audio started at ${startTime.toFixed(3)}`
+                `[🔊 Audio Playback] ▶️ Audio started at ${startTime.toFixed(
+                  3
+                )}`
               );
 
               nextStartTimeRef.current = startTime + audioBuffer.duration;
               console.log(
-                `[🔊 Audio Playback] ⏱️ Next start time: ${nextStartTimeRef.current.toFixed(3)}`
+                `[🔊 Audio Playback] ⏱️ Next start time: ${nextStartTimeRef.current.toFixed(
+                  3
+                )}`
               );
 
               audioSourcesRef.current.add(source);
