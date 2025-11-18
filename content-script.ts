@@ -175,28 +175,86 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.type === "ADD_PR_COMMENT") {
-    const { lineNumber, commentText } = request;
+    const { lineNumber, commentText, fileName } = request;
     console.log(
-      `[Content Script] Attempting to add PR comment at line ${lineNumber}`
+      `[Content Script] Attempting to add PR comment at line ${lineNumber}${
+        fileName ? ` in file ${fileName}` : ""
+      }`
     );
 
     try {
       // Find the line element with multiple strategies
       let lineElement: HTMLElement | null = null;
 
-      // Strategy 1: Direct ID lookup
-      lineElement = document.getElementById(`L${lineNumber}`);
-      if (lineElement) {
-        console.log(
-          `[Content Script] Found line via getElementById L${lineNumber}`
+      // If fileName is provided, first find the file container
+      let fileContainer: HTMLElement | null = null;
+      if (fileName) {
+        // Try to find the file container using the filename
+        // GitHub structures PRs with file headers that contain the filename
+        const fileHeaders = document.querySelectorAll(
+          "[data-testid='diff-file-header'], .file-header, [data-path]"
         );
+        console.log(
+          `[Content Script] Found ${fileHeaders.length} potential file headers`
+        );
+
+        for (const header of fileHeaders) {
+          const path = header.getAttribute("data-path") || header.textContent || "";
+          console.log(
+            `[Content Script] Checking file header: "${path}", looking for: "${fileName}"`
+          );
+
+          // Check if this header contains the fileName
+          if (path.includes(fileName) || path.endsWith(fileName)) {
+            // Find the file container (usually a section or div after the header)
+            fileContainer =
+              (header.closest("[data-testid='diff-file']") as HTMLElement) ||
+              (header.closest("section") as HTMLElement) ||
+              (header.parentElement as HTMLElement);
+            console.log(
+              `[Content Script] Found file container for ${fileName}`
+            );
+            break;
+          }
+        }
+
+        if (!fileContainer) {
+          console.warn(
+            `[Content Script] Could not find file container for "${fileName}", will search globally`
+          );
+        }
       }
 
-      // Strategy 2: Attribute selector
-      if (!lineElement) {
-        lineElement = document.querySelector(
+      // Strategy 1: Direct ID lookup (within file container if available)
+      if (fileContainer) {
+        lineElement = fileContainer.querySelector(
           `[id="L${lineNumber}"]`
         ) as HTMLElement;
+        if (lineElement) {
+          console.log(
+            `[Content Script] Found line via file-scoped querySelector L${lineNumber}`
+          );
+        }
+      } else {
+        lineElement = document.getElementById(`L${lineNumber}`);
+        if (lineElement) {
+          console.log(
+            `[Content Script] Found line via getElementById L${lineNumber}`
+          );
+        }
+      }
+
+      // Strategy 2: Attribute selector (within file container if available)
+      if (!lineElement) {
+        if (fileContainer) {
+          lineElement = fileContainer.querySelector(
+            `[id="L${lineNumber}"]`
+          ) as HTMLElement;
+        } else {
+          lineElement = document.querySelector(
+            `[id="L${lineNumber}"]`
+          ) as HTMLElement;
+        }
         if (lineElement) {
           console.log(
             `[Content Script] Found line via querySelector [id="L${lineNumber}"]`
@@ -204,23 +262,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
       }
 
-      // Strategy 3: Data attribute with line number
+      // Strategy 3: Data attribute with line number (within file container if available)
       if (!lineElement) {
-        lineElement = document.querySelector(
-          `[data-line-number="${lineNumber}"]`
-        ) as HTMLElement;
+        if (fileContainer) {
+          lineElement = fileContainer.querySelector(
+            `[data-line-number="${lineNumber}"]`
+          ) as HTMLElement;
+        } else {
+          lineElement = document.querySelector(
+            `[data-line-number="${lineNumber}"]`
+          ) as HTMLElement;
+        }
         if (lineElement) {
           console.log(`[Content Script] Found line via data-line-number`);
         }
       }
 
-      // Strategy 4: Look for table rows with line indicators
+      // Strategy 4: Look for table rows with line indicators (within file container if available)
       if (!lineElement) {
-        const allLineElements = document.querySelectorAll(
+        let searchContainer = fileContainer || document;
+        const allLineElements = searchContainer.querySelectorAll(
           `tr, [data-testid*="line"], .blob-code-line`
         );
         console.log(
-          `[Content Script] Searching through ${allLineElements.length} potential line elements`
+          `[Content Script] Searching through ${allLineElements.length} potential line elements${
+            fileContainer ? " in file container" : " globally"
+          }`
         );
 
         for (const el of allLineElements) {
