@@ -294,11 +294,11 @@ const WalkthroughStepItem: React.FC<{
         onClick={handleClick}
         className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-700/30 rounded-t-lg"
       >
-        <div className="flex items-start gap-3">
-          <span className="text-lg font-bold text-gray-500">{index}.</span>
-          <div>
-            <span className="font-semibold text-blue-400">{step.title}</span>
-            <div className="text-xs text-gray-500 mt-1 font-mono flex items-center">
+        <div className="flex items-start gap-3 overflow-hidden">
+          <span className="text-lg font-bold text-gray-500 flex-shrink-0">{index}.</span>
+          <div className="overflow-hidden">
+            <span className="font-semibold text-blue-400 block overflow-hidden whitespace-nowrap text-ellipsis">{step.title}</span>
+            <div className="text-xs text-gray-500 mt-1 font-mono flex items-center overflow-hidden">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-3 w-3 mr-1.5 flex-shrink-0"
@@ -311,7 +311,7 @@ const WalkthroughStepItem: React.FC<{
                   clipRule="evenodd"
                 />
               </svg>
-              {step.file}:{step.lines}
+              <span className="truncate">{step.file}:{step.lines}</span>
             </div>
           </div>
         </div>

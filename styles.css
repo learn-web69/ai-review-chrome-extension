@@ -147,6 +147,19 @@ body {
 .whitespace-pre-wrap {
   white-space: pre-wrap;
 }
+.whitespace-nowrap {
+  white-space: nowrap;
+}
+
+.text-ellipsis {
+  text-overflow: ellipsis;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .p-2 {
   padding: 0.5rem;
