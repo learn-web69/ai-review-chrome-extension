@@ -10,6 +10,14 @@ import {
 import { TranscriptionMessage } from "./types";
 import { blobToBase64, encode, decode, decodeAudioData } from "./utils/audio";
 import { getApiKey, setApiKey, hasApiKey } from "./utils/storage";
+import {
+  getCurrentRepoUrl,
+  getCurrentPRUrl,
+  checkRepoStatus,
+  initRepository,
+  reviewPR,
+  type RepoStatusResponse,
+} from "./utils/api";
 
 // --- ENUMS & TYPES ---
 enum RepoStatus {
@@ -595,6 +603,12 @@ const App: React.FC = () => {
   const [isDialogueExpanded, setIsDialogueExpanded] = useState(false);
   const [isAISpeaking, setIsAISpeaking] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const [currentRepoUrl, setCurrentRepoUrl] = useState<string | null>(null);
+  const [currentRepoId, setCurrentRepoId] = useState<string | null>(null);
+  const [currentPRUrl, setCurrentPRUrl] = useState<string | null>(null);
+  const [repoMetadata, setRepoMetadata] = useState<
+    RepoStatusResponse["metadata"] | null
+  >(null);
 
   // --- REFS ---
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -623,6 +637,44 @@ const App: React.FC = () => {
     hasApiKey().then(setHasStoredApiKey);
   }, []);
 
+  // Check repo status on mount
+  useEffect(() => {
+    const checkInitialRepoStatus = async () => {
+      try {
+        // Get current repo URL from the active tab
+        const repoUrl = await getCurrentRepoUrl();
+        if (!repoUrl) {
+          console.log("[App] Not on a GitHub page");
+          return;
+        }
+
+        console.log("[App] Checking status for repo:", repoUrl);
+        setCurrentRepoUrl(repoUrl);
+
+        // Check if repo is indexed
+        const status = await checkRepoStatus(repoUrl);
+        setCurrentRepoId(status.repo_id);
+
+        if (status.indexed) {
+          console.log("[App] Repo is already indexed");
+          setRepoMetadata(status.metadata || null);
+          setRepoStatus(RepoStatus.READY);
+        } else {
+          console.log("[App] Repo is not indexed");
+          setRepoStatus(RepoStatus.UNINITIALIZED);
+        }
+      } catch (err) {
+        console.error("[App] Error checking repo status:", err);
+        setError(
+          `Failed to check repository status: ${(err as Error).message}`
+        );
+        setRepoStatus(RepoStatus.UNINITIALIZED);
+      }
+    };
+
+    checkInitialRepoStatus();
+  }, []);
+
   // --- HANDLERS & LOGIC ---
   const handleSaveApiKey = async () => {
     if (apiKeyInput.trim()) {
@@ -633,27 +685,68 @@ const App: React.FC = () => {
     }
   };
 
-  const handleInitRepo = () => {
+  const handleInitRepo = async () => {
     setError(null);
-    setRepoStatus(RepoStatus.INDEXING);
-    setIndexingProgress(0);
+
+    if (!currentRepoUrl) {
+      setError(
+        "No repository URL found. Please navigate to a GitHub repository."
+      );
+      return;
+    }
+
+    try {
+      setRepoStatus(RepoStatus.INDEXING);
+      setIndexingProgress(0);
+
+      console.log("[App] Initializing repository:", currentRepoUrl);
+
+      // Start fake progress animation
+      const progressInterval = window.setInterval(() => {
+        setIndexingProgress((prev) => {
+          // Slow down as we approach 90%
+          if (prev >= 90) return prev;
+          const increment = prev < 50 ? 8 : prev < 70 ? 5 : 2;
+          return Math.min(prev + increment, 90);
+        });
+      }, 500);
+
+      // Call synchronous init-repository API (this will take time)
+      const initResponse = await initRepository(currentRepoUrl);
+
+      // Stop fake progress
+      clearInterval(progressInterval);
+
+      setCurrentRepoId(initResponse.repo_id);
+
+      console.log("[App] Repository initialization response:", initResponse);
+
+      if (initResponse.status === "error") {
+        throw new Error(
+          initResponse.error || "Repository initialization failed"
+        );
+      }
+
+      // Complete the progress bar
+      setIndexingProgress(100);
+
+      // Store metadata if available
+      if (initResponse.metadata) {
+        setRepoMetadata(initResponse.metadata);
+      }
+
+      console.log("[App] Repository indexing completed");
+      setRepoStatus(RepoStatus.READY);
+    } catch (err) {
+      console.error("[App] Error initializing repository:", err);
+      setError(`Failed to initialize repository: ${(err as Error).message}`);
+      setRepoStatus(RepoStatus.ERROR);
+    }
   };
 
   useEffect(() => {
     let interval: number | undefined;
-    if (repoStatus === RepoStatus.INDEXING) {
-      interval = window.setInterval(() => {
-        setIndexingProgress((prev) => {
-          const newProgress = prev + Math.floor(Math.random() * 10) + 5;
-          if (newProgress >= 100) {
-            clearInterval(interval);
-            setRepoStatus(RepoStatus.READY);
-            return 100;
-          }
-          return newProgress;
-        });
-      }, 300);
-    }
+    // Removed old fake indexing progress - now handled by real API polling
     return () => {
       if (interval) {
         clearInterval(interval);
@@ -668,91 +761,48 @@ const App: React.FC = () => {
     }
   }, [liveStatus, isDialogueExpanded]);
 
-  const handleGenerateWalkthrough = () => {
-    setRepoStatus(RepoStatus.GENERATING_WALKTHROUGH);
-    setTimeout(() => {
-      const fakeData: WalkthroughStep[] = [
-        {
-          id: 1,
-          title: "Create WikiViewer Component",
-          description:
-            "A new WikiViewer component is created to display Wikipedia articles within an iframe. This component handles rendering the article, mobile URL adaptation, and interactions like closing, navigating, liking, and sharing.",
-          file: "frontend/src/components/WikiViewer.tsx",
-          lines: "1-99",
-          codeSnippet: "",
-          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-7ef7b3bfd9a760731b8bbccd2a0c7c88cc57ffa40ad3ef285b638e58147a02baR1-R99",
-          lineNumber: 1,
-        },
-        {
-          id: 2,
-          title: "Add mobile URL handling to WikiViewer",
-          description:
-            "The WikiViewer component now adapts the Wikipedia URL for mobile devices. This ensures a better viewing experience on smaller screens by redirecting to the mobile version of Wikipedia.",
-          file: "frontend/src/components/WikiViewer.tsx",
-          lines: "31-34",
-          codeSnippet: "",
-          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-7ef7b3bfd9a760731b8bbccd2a0c7c88cc57ffa40ad3ef285b638e58147a02baR31-R34",
-          lineNumber: 31,
-        },
-        {
-          id: 3,
-          title: "Use LikedArticlesContext in WikiViewer",
-          description:
-            "The WikiViewer component integrates with the LikedArticlesContext to allow users to like or unlike articles. This adds functionality to persist user preferences for liked articles.",
-          file: "frontend/src/components/WikiViewer.tsx",
-          lines: "16",
-          codeSnippet: "",
-          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-7ef7b3bfd9a760731b8bbccd2a0c7c88cc57ffa40ad3ef285b638e58147a02baR16",
-          lineNumber: 16,
-        },
-        {
-          id: 4,
-          title: "Add share functionality",
-          description:
-            "The app now has share functionality. Users can share articles, and if native sharing isn't available, the link copies to the clipboard.",
-          file: "frontend/src/App.tsx",
-          lines: "94-112",
-          codeSnippet: "",
-          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-e56cb91573ddb6a97ecd071925fe26504bb5a65f921dc64c63e534162950e1ebR94-R112",
-          lineNumber: 94,
-        },
-        {
-          id: 5,
-          title: "Implement article navigation",
-          description:
-            "The app implements article navigation. The `handleNextArticle` and `handlePreviousArticle` functions enable users to browse through articles in the order they appear in the `articles` array.",
-          file: "frontend/src/App.tsx",
-          lines: "80-92",
-          codeSnippet: "",
-          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-e56cb91573ddb6a97ecd071925fe26504bb5a65f921dc64c63e534162950e1ebR80-R92",
-          lineNumber: 80,
-        },
-        {
-          id: 6,
-          title: "Add state for current article",
-          description:
-            "The App component manages the currently viewed article using `currentArticle` state. The current index is managed by `currentIndex` state. This state enables the app to display a specific article in the `WikiViewer` component and navigate articles.",
-          file: "frontend/src/App.tsx",
-          lines: "14-15",
-          codeSnippet: "",
-          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-e56cb91573ddb6a97ecd071925fe26504bb5a65f921dc64c63e534162950e1ebR14-R15",
-          lineNumber: 14,
-        },
-        {
-          id: 7,
-          title: "Integrate WikiViewer in App",
-          description:
-            "The WikiViewer component is integrated into the App component to display the selected article.  The App component passes down the article data and handler functions to the WikiViewer.",
-          file: "frontend/src/App.tsx",
-          lines: "286-296",
-          codeSnippet: "",
-          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-e56cb91573ddb6a97ecd071925fe26504bb5a65f921dc64c63e534162950e1ebR286-R296",
-          lineNumber: 286,
-        },
-      ];
-      setWalkthroughSteps(fakeData);
+  const handleGenerateWalkthrough = async () => {
+    setError(null);
+
+    try {
+      // Get current PR URL
+      const prUrl = await getCurrentPRUrl();
+      if (!prUrl) {
+        setError(
+          "Please navigate to a GitHub Pull Request page to generate a walkthrough."
+        );
+        return;
+      }
+
+      setCurrentPRUrl(prUrl);
+      setRepoStatus(RepoStatus.GENERATING_WALKTHROUGH);
+
+      console.log("[App] Generating walkthrough for PR:", prUrl);
+
+      // Call review-pr API
+      const reviewResponse = await reviewPR(prUrl);
+
+      console.log("[App] Walkthrough generated:", reviewResponse);
+
+      // Map API response to WalkthroughStep format
+      const steps: WalkthroughStep[] = reviewResponse.steps.map((step) => ({
+        id: step.id,
+        title: step.title,
+        description: step.description,
+        file: step.file,
+        lines: step.lines,
+        codeSnippet: step.codeSnippet || "",
+        url: step.url,
+        lineNumber: step.lineNumber,
+      }));
+
+      setWalkthroughSteps(steps);
       setRepoStatus(RepoStatus.WALKTHROUGH_READY);
-    }, 2000); // Simulate API call
+    } catch (err) {
+      console.error("[App] Error generating walkthrough:", err);
+      setError(`Failed to generate walkthrough: ${(err as Error).message}`);
+      setRepoStatus(RepoStatus.ERROR);
+    }
   };
 
   const handleSelectStep = (step: WalkthroughStep) => {
