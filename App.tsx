@@ -323,16 +323,6 @@ const WalkthroughStepItem: React.FC<{
               </code>
             </pre>
           </div>
-          {step.url && (
-            <a
-              href={step.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-3 text-xs text-blue-400 hover:text-blue-300 underline"
-            >
-              View on GitHub →
-            </a>
-          )}
         </div>
       </div>
     </div>
@@ -684,38 +674,80 @@ const App: React.FC = () => {
       const fakeData: WalkthroughStep[] = [
         {
           id: 1,
-          title: "Optimize State Management",
+          title: "Create WikiViewer Component",
           description:
-            "The component re-renders frequently. Consider using `useCallback` or `React.memo` to optimize performance by memoizing functions and components.",
-          file: "react.dev",
-          lines: "3",
-          codeSnippet:
-            "const memoizedCallback = useCallback(\n  () => {\n    doSomething(a, b);\n  },\n  [a, b],\n);",
-          url: "https://github.com/reactjs/react.dev/pull/5619/files#diff-b5c4538e49b3838bc814b118fbc878796ed95a9b0ab60da6de7f2380e98f68cbR3",
-          lineNumber: 3,
+            "A new WikiViewer component is created to display Wikipedia articles within an iframe. This component handles rendering the article, mobile URL adaptation, and interactions like closing, navigating, liking, and sharing.",
+          file: "frontend/src/components/WikiViewer.tsx",
+          lines: "1-99",
+          codeSnippet: "",
+          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-7ef7b3bfd9a760731b8bbccd2a0c7c88cc57ffa40ad3ef285b638e58147a02baR1-R99",
+          lineNumber: 1,
         },
         {
           id: 2,
-          title: "Improve Accessibility",
+          title: "Add mobile URL handling to WikiViewer",
           description:
-            "The button element is missing an `aria-label` for screen readers. Add a descriptive label to ensure it's accessible for all users.",
-          file: "react.dev",
-          lines: "58",
-          codeSnippet: '<button aria-label="Close dialog">\n  X\n</button>',
-          url: "https://github.com/reactjs/react.dev/pull/5619/files#diff-2d3f2d78d4bc514e1c26e749e35cc007f81675f6001557c69014c0a814eeb1a3R58",
-          lineNumber: 58,
+            "The WikiViewer component now adapts the Wikipedia URL for mobile devices. This ensures a better viewing experience on smaller screens by redirecting to the mobile version of Wikipedia.",
+          file: "frontend/src/components/WikiViewer.tsx",
+          lines: "31-34",
+          codeSnippet: "",
+          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-7ef7b3bfd9a760731b8bbccd2a0c7c88cc57ffa40ad3ef285b638e58147a02baR31-R34",
+          lineNumber: 31,
         },
         {
           id: 3,
-          title: "Security Vulnerability",
+          title: "Use LikedArticlesContext in WikiViewer",
           description:
-            "Using `dangerouslySetInnerHTML` can expose the app to XSS attacks. Sanitize the HTML before rendering it to prevent malicious script injection.",
-          file: "react.dev",
-          lines: "5291",
-          codeSnippet:
-            "import DOMPurify from 'dompurify';\n\nconst cleanHTML = DOMPurify.sanitize(dirtyHTML);",
-          url: "https://github.com/reactjs/react.dev/pull/5619/files#diff-497aef6f7279cfffd57f811db53afe9fcf6a0ab284c343c2ff98e9fc7e633b79R5291",
-          lineNumber: 5291,
+            "The WikiViewer component integrates with the LikedArticlesContext to allow users to like or unlike articles. This adds functionality to persist user preferences for liked articles.",
+          file: "frontend/src/components/WikiViewer.tsx",
+          lines: "16",
+          codeSnippet: "",
+          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-7ef7b3bfd9a760731b8bbccd2a0c7c88cc57ffa40ad3ef285b638e58147a02baR16",
+          lineNumber: 16,
+        },
+        {
+          id: 4,
+          title: "Add share functionality",
+          description:
+            "The app now has share functionality. Users can share articles, and if native sharing isn't available, the link copies to the clipboard.",
+          file: "frontend/src/App.tsx",
+          lines: "94-112",
+          codeSnippet: "",
+          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-e56cb91573ddb6a97ecd071925fe26504bb5a65f921dc64c63e534162950e1ebR94-R112",
+          lineNumber: 94,
+        },
+        {
+          id: 5,
+          title: "Implement article navigation",
+          description:
+            "The app implements article navigation. The `handleNextArticle` and `handlePreviousArticle` functions enable users to browse through articles in the order they appear in the `articles` array.",
+          file: "frontend/src/App.tsx",
+          lines: "80-92",
+          codeSnippet: "",
+          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-e56cb91573ddb6a97ecd071925fe26504bb5a65f921dc64c63e534162950e1ebR80-R92",
+          lineNumber: 80,
+        },
+        {
+          id: 6,
+          title: "Add state for current article",
+          description:
+            "The App component manages the currently viewed article using `currentArticle` state. The current index is managed by `currentIndex` state. This state enables the app to display a specific article in the `WikiViewer` component and navigate articles.",
+          file: "frontend/src/App.tsx",
+          lines: "14-15",
+          codeSnippet: "",
+          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-e56cb91573ddb6a97ecd071925fe26504bb5a65f921dc64c63e534162950e1ebR14-R15",
+          lineNumber: 14,
+        },
+        {
+          id: 7,
+          title: "Integrate WikiViewer in App",
+          description:
+            "The WikiViewer component is integrated into the App component to display the selected article.  The App component passes down the article data and handler functions to the WikiViewer.",
+          file: "frontend/src/App.tsx",
+          lines: "286-296",
+          codeSnippet: "",
+          url: "https://github.com/IsaacGemal/wikitok/pull/83/files#diff-e56cb91573ddb6a97ecd071925fe26504bb5a65f921dc64c63e534162950e1ebR286-R296",
+          lineNumber: 286,
         },
       ];
       setWalkthroughSteps(fakeData);
