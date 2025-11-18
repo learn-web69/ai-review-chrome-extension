@@ -199,7 +199,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         );
 
         for (const header of fileHeaders) {
-          const path = header.getAttribute("data-path") || header.textContent || "";
+          const path =
+            header.getAttribute("data-path") || header.textContent || "";
           console.log(
             `[Content Script] Checking file header: "${path}", looking for: "${fileName}"`
           );
@@ -285,7 +286,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           `tr, [data-testid*="line"], .blob-code-line`
         );
         console.log(
-          `[Content Script] Searching through ${allLineElements.length} potential line elements${
+          `[Content Script] Searching through ${
+            allLineElements.length
+          } potential line elements${
             fileContainer ? " in file container" : " globally"
           }`
         );
