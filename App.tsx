@@ -53,7 +53,7 @@ interface WalkthroughStep {
 
 // --- CONSTANTS ---
 const MODEL_NAME = "gemini-2.5-flash-native-audio-preview-09-2025";
-const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. IMPORTANT: The user must be viewing a GitHub PR page for comment features to work. When the user asks to navigate to a specific step (e.g., "go to step 1", "proceed to step 3", "show step 2"), you MUST use the "selectStep" tool with the step number to navigate there. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks to comment on a specific line of code (e.g., "Please comment here that it's better to use async/await"), you MUST use the "addPRComment" tool with the line number and your suggested comment text. The comment will be inserted into the GitHub PR comment dialog, ready for user approval. IMPORTANT: After using the "addPRComment" tool, do NOT say anything about adding a comment. Just silently use the tool. Do NOT mention that you created a comment or that the dialog opened. After using the "selectStep" tool, do NOT mention that you've navigated to a step. Instead, the tool will provide you with the step's description - read this description aloud to the user in a natural, conversational way. Do NOT describe what you see on screen unless asked. After using the "highlightWalkthroughStep" tool, do NOT mention that you've highlighted a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. When the user asks about code that requires understanding implementation details not visible on screen (such as imported functions, external modules, or complex logic), you MUST use the "answerCodeQuestion" tool. CRITICAL: When using the "answerCodeQuestion" tool, say ONLY "Let me think..." and then WAIT SILENTLY for the tool response. Do NOT speculate, guess, or provide any answer until you receive the tool response. Do NOT mention file names, line numbers, or import statements in your answer unless specifically asked - focus only on explaining how the code works and key implementation details. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. Once you have successfully answered a question based on what you can see, do NOT second-guess yourself or ask to scroll unless the user asks a NEW question about code that is clearly not visible. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
+const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. IMPORTANT: The user must be viewing a GitHub PR page for comment features to work. When the user asks to navigate to a specific step (e.g., "go to step 1", "proceed to step 3", "show step 2"), you MUST use the "selectStep" tool with the step number to navigate there. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks to comment on a specific line of code (e.g., "Please comment here that it's better to use async/await"), you MUST use the "addPRComment" tool with the line number and your suggested comment text. The comment will be inserted into the GitHub PR comment dialog, ready for user approval. IMPORTANT: After using the "addPRComment" tool, do NOT say anything about adding a comment. Just silently use the tool. Do NOT mention that you created a comment or that the dialog opened. After using the "selectStep" tool, do NOT mention that you've navigated to a step. Instead, the tool will provide you with the step's description - read this description aloud to the user in a natural, conversational way. Do NOT describe what you see on screen unless asked. After using the "highlightWalkthroughStep" tool, do NOT mention that you've highlighted a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. CRITICAL RULE FOR COMPLEX QUESTIONS: When the user asks about code that requires understanding implementation details not visible on screen (such as imported functions, how external modules work, what a function does internally, or any complex logic), you MUST FIRST use the "answerCodeQuestion" tool BEFORE attempting to answer. Do NOT try to answer from what you see on screen alone. MANDATORY PROCESS: (1) Say ONLY "Let me think..." - nothing else, (2) Immediately call the "answerCodeQuestion" tool, (3) STOP and WAIT SILENTLY - do not speak, speculate, or provide any answer, (4) Only after receiving the tool response, provide a complete answer based on the tool's response. Do NOT mention file names, line numbers, or import statements in your answer unless specifically asked - focus only on explaining how the code works and key implementation details. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. Once you have successfully answered a question based on what you can see, do NOT second-guess yourself or ask to scroll unless the user asks a NEW question about code that is clearly not visible. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
 const FRAME_RATE = 5;
 const JPEG_QUALITY = 0.8;
 
@@ -151,7 +151,7 @@ const selectStepFunctionDeclaration: FunctionDeclaration = {
 const answerCodeQuestionFunctionDeclaration: FunctionDeclaration = {
   name: "answerCodeQuestion",
   description:
-    "Gets detailed information about code implementation when the visible content is insufficient. Use this when the user asks about imported functions, external dependencies, or non-trivial code that requires understanding implementation details not visible on screen. This tool retrieves relevant context from the indexed codebase. When using this tool, say ONLY 'Let me think...' and wait silently for the response - do not speculate or provide answers until the tool returns. Focus your answer on how the code works and key implementation details, not on file locations or import statements.",
+    'MANDATORY TOOL for complex code questions. Use this when the user asks about: (1) How imported functions or external modules work internally, (2) What a function does or how it\'s implemented, (3) Complex logic or implementation details not fully visible on screen, (4) Any "how does X work" or "what does X do" questions. CRITICAL WORKFLOW: First say ONLY "Let me think..." (no other words), then immediately call this tool, then STOP and wait completely silently for the response. Do NOT attempt to answer before the tool responds. Do NOT speculate or provide partial answers. The tool will retrieve detailed implementation context from the indexed codebase.',
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -662,14 +662,22 @@ const App: React.FC = () => {
   const audioSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const activateStepRef = useRef<((stepId: number) => void) | null>(null);
   const walkthroughStepsRef = useRef<WalkthroughStep[]>([]);
+  const currentRepoIdRef = useRef<string | null>(null);
 
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => {
     walkthroughStepsRef.current = walkthroughSteps;
     console.log(
       `[useEffect] Updated walkthroughStepsRef.current, length: ${walkthroughSteps.length}`
     );
   }, [walkthroughSteps]);
+
+  useEffect(() => {
+    currentRepoIdRef.current = currentRepoId;
+    console.log(
+      `[useEffect] Updated currentRepoIdRef.current: ${currentRepoId}`
+    );
+  }, [currentRepoId]);
 
   // Check for API key on mount
   useEffect(() => {
@@ -692,6 +700,7 @@ const App: React.FC = () => {
 
         // Check if repo is indexed
         const status = await checkRepoStatus(repoUrl);
+        console.log("=== REPO STATUS ===", status);
         setCurrentRepoId(status.repo_id);
 
         if (status.indexed) {
@@ -1521,11 +1530,17 @@ const App: React.FC = () => {
                     file || "N/A"
                   }, line: ${line || "N/A"}, code provided: ${!!code}`
                 );
+                console.log(
+                  `[answerCodeQuestion Tool] currentRepoIdRef: ${currentRepoIdRef.current}`
+                );
+                console.log(
+                  `[answerCodeQuestion Tool] question type: ${typeof question}, question value: "${question}"`
+                );
 
-                if (typeof question === "string" && currentRepoId) {
+                if (typeof question === "string" && currentRepoIdRef.current) {
                   // Build the request
                   const request: AnswerCodeQuestionRequest = {
-                    repo_id: currentRepoId,
+                    repo_id: currentRepoIdRef.current,
                     question,
                     file,
                     line,
@@ -1545,6 +1560,9 @@ const App: React.FC = () => {
                         `[answerCodeQuestion Tool] Received answer:`,
                         result.answer
                       );
+                      console.log(
+                        `[answerCodeQuestion Tool] Sending response back to AI...`
+                      );
 
                       // Send the response back to the AI
                       const response = {
@@ -1557,13 +1575,19 @@ const App: React.FC = () => {
                         },
                       };
 
-                      sessionPromise.then((session) =>
-                        (session as unknown as LiveSession).sendToolResponse({
-                          functionResponses: [response],
-                        })
+                      const session = await sessionPromise;
+                      (session as unknown as LiveSession).sendToolResponse({
+                        functionResponses: [response],
+                      });
+                      console.log(
+                        `[answerCodeQuestion Tool] Response sent successfully`
                       );
                     } catch (error) {
                       console.error(`[answerCodeQuestion Tool] Error:`, error);
+                      console.error(
+                        `[answerCodeQuestion Tool] Error stack:`,
+                        (error as Error).stack
+                      );
                       const errorResponse = {
                         id: fc.id!,
                         name: fc.name,
@@ -1574,14 +1598,23 @@ const App: React.FC = () => {
                         },
                       };
 
-                      sessionPromise.then((session) =>
+                      try {
+                        const session = await sessionPromise;
                         (session as unknown as LiveSession).sendToolResponse({
                           functionResponses: [errorResponse],
-                        })
-                      );
+                        });
+                        console.log(
+                          `[answerCodeQuestion Tool] Error response sent`
+                        );
+                      } catch (sessionError) {
+                        console.error(
+                          `[answerCodeQuestion Tool] Failed to send error response:`,
+                          sessionError
+                        );
+                      }
                     }
                   })();
-                } else if (!currentRepoId) {
+                } else if (!currentRepoIdRef.current) {
                   functionResponses.push({
                     id: fc.id!,
                     name: fc.name,
