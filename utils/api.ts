@@ -50,6 +50,23 @@ export interface ReviewPRResponse {
   steps: ReviewPRStep[];
 }
 
+export interface AnswerCodeQuestionRequest {
+  repo_id: string;
+  file?: string;
+  line?: string;
+  code?: string;
+  question: string;
+  walkthrough?: ReviewPRStep[];
+}
+
+export interface AnswerCodeQuestionResponse {
+  status: "success";
+  answer: string;
+  relatedContext?: any[];
+  confidence?: number;
+  sources?: string[];
+}
+
 /**
  * Extracts the GitHub repository URL from the current tab
  */
@@ -158,6 +175,29 @@ export async function reviewPR(prUrl: string): Promise<ReviewPRResponse> {
 
   if (!response.ok) {
     throw new Error(`Failed to review PR: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Answer a question about code using contextual review
+ */
+export async function answerCodeQuestion(
+  request: AnswerCodeQuestionRequest
+): Promise<AnswerCodeQuestionResponse> {
+  const url = `${API_BASE_URL}/tools/review`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to answer code question: ${response.statusText}`);
   }
 
   return response.json();

@@ -16,7 +16,9 @@ import {
   checkRepoStatus,
   initRepository,
   reviewPR,
+  answerCodeQuestion,
   type RepoStatusResponse,
+  type AnswerCodeQuestionRequest,
 } from "./utils/api";
 
 // --- ENUMS & TYPES ---
@@ -51,7 +53,7 @@ interface WalkthroughStep {
 
 // --- CONSTANTS ---
 const MODEL_NAME = "gemini-2.5-flash-native-audio-preview-09-2025";
-const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. IMPORTANT: The user must be viewing a GitHub PR page for comment features to work. When the user asks to navigate to a specific step (e.g., "go to step 1", "proceed to step 3", "show step 2"), you MUST use the "selectStep" tool with the step number to navigate there. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks to comment on a specific line of code (e.g., "Please comment here that it's better to use async/await"), you MUST use the "addPRComment" tool with the line number and your suggested comment text. The comment will be inserted into the GitHub PR comment dialog, ready for user approval. IMPORTANT: After using the "addPRComment" tool, do NOT say anything about adding a comment. Just silently use the tool. Do NOT mention that you created a comment or that the dialog opened. After using the "highlightWalkthroughStep" or "selectStep" tools, do NOT mention that you've highlighted or navigated to a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. Once you have successfully answered a question based on what you can see, do NOT second-guess yourself or ask to scroll unless the user asks a NEW question about code that is clearly not visible. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
+const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose is to help the user by looking at their screen and answering their questions about the code. IMPORTANT: The user must be viewing a GitHub PR page for comment features to work. When the user asks to navigate to a specific step (e.g., "go to step 1", "proceed to step 3", "show step 2"), you MUST use the "selectStep" tool with the step number to navigate there. When discussing one of the generated walkthrough steps, you MUST use the "highlightWalkthroughStep" tool with the corresponding step ID to guide the user. When the user asks to comment on a specific line of code (e.g., "Please comment here that it's better to use async/await"), you MUST use the "addPRComment" tool with the line number and your suggested comment text. The comment will be inserted into the GitHub PR comment dialog, ready for user approval. IMPORTANT: After using the "addPRComment" tool, do NOT say anything about adding a comment. Just silently use the tool. Do NOT mention that you created a comment or that the dialog opened. After using the "selectStep" tool, do NOT mention that you've navigated to a step. Instead, the tool will provide you with the step's description - read this description aloud to the user in a natural, conversational way. Do NOT describe what you see on screen unless asked. After using the "highlightWalkthroughStep" tool, do NOT mention that you've highlighted a step. Instead, silently wait 2-3 seconds for the screen to update, then directly describe what you see on the screen without referencing the tool. When the user asks a question about a different piece of code, you MUST use the "logCodeContext" tool to identify the code snippet they are referring to. When the user asks about code that requires understanding implementation details not visible on screen (such as imported functions, external modules, or complex logic), you MUST use the "answerCodeQuestion" tool. CRITICAL: When using the "answerCodeQuestion" tool, say ONLY "Let me think..." and then WAIT SILENTLY for the tool response. Do NOT speculate, guess, or provide any answer until you receive the tool response. Do NOT mention file names, line numbers, or import statements in your answer unless specifically asked - focus only on explaining how the code works and key implementation details. After using a tool, provide a conversational, helpful, and concise answer based on the code you see on the screen. Once you have successfully answered a question based on what you can see, do NOT second-guess yourself or ask to scroll unless the user asks a NEW question about code that is clearly not visible. If you are interrupted, stop talking immediately and wait silently for the next command. Do not say "Okay" or any other confirmation. Do not respond to filler words or short utterances like 'uh' or 'hmm'; wait for a complete question or statement before replying.`;
 const FRAME_RATE = 5;
 const JPEG_QUALITY = 0.8;
 
@@ -143,6 +145,38 @@ const selectStepFunctionDeclaration: FunctionDeclaration = {
       },
     },
     required: ["stepNumber"],
+  },
+};
+
+const answerCodeQuestionFunctionDeclaration: FunctionDeclaration = {
+  name: "answerCodeQuestion",
+  description:
+    "Gets detailed information about code implementation when the visible content is insufficient. Use this when the user asks about imported functions, external dependencies, or non-trivial code that requires understanding implementation details not visible on screen. This tool retrieves relevant context from the indexed codebase. When using this tool, say ONLY 'Let me think...' and wait silently for the response - do not speculate or provide answers until the tool returns. Focus your answer on how the code works and key implementation details, not on file locations or import statements.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      question: {
+        type: Type.STRING,
+        description:
+          "The user's question about the code. Be specific and include context.",
+      },
+      code: {
+        type: Type.STRING,
+        description:
+          "The code snippet being asked about, if available from the screen.",
+      },
+      file: {
+        type: Type.STRING,
+        description:
+          "The file path containing the code in question, if visible on screen.",
+      },
+      line: {
+        type: Type.STRING,
+        description:
+          'The line number or range (e.g., "42" or "42-45") being asked about, if visible on screen.',
+      },
+    },
+    required: ["question"],
   },
 };
 
@@ -776,6 +810,7 @@ const App: React.FC = () => {
         setError(
           "Please navigate to a GitHub Pull Request page to generate a walkthrough."
         );
+        setRepoStatus(RepoStatus.ERROR);
         return;
       }
 
@@ -1105,6 +1140,7 @@ const App: React.FC = () => {
               highlightWalkthroughStepFunctionDeclaration,
               addPRCommentFunctionDeclaration,
               selectStepFunctionDeclaration,
+              answerCodeQuestionFunctionDeclaration,
             ],
           },
         ],
@@ -1441,7 +1477,7 @@ const App: React.FC = () => {
                         id: fc.id!,
                         name: fc.name,
                         response: {
-                          result: ``,
+                          result: `Step ${stepNumber}: ${step.title}\n\n${step.description}`,
                         },
                       };
 
@@ -1468,6 +1504,98 @@ const App: React.FC = () => {
                     response: {
                       result:
                         "Invalid step number. Please provide a valid step number starting from 1.",
+                    },
+                  });
+                }
+              } else if (fc.name === "answerCodeQuestion") {
+                const question = fc.args?.question as string;
+                const code = fc.args?.code as string | undefined;
+                const file = fc.args?.file as string | undefined;
+                const line = fc.args?.line as string | undefined;
+
+                console.log(
+                  `[answerCodeQuestion Tool] Called with question: "${question}"`
+                );
+                console.log(
+                  `[answerCodeQuestion Tool] Context - file: ${
+                    file || "N/A"
+                  }, line: ${line || "N/A"}, code provided: ${!!code}`
+                );
+
+                if (typeof question === "string" && currentRepoId) {
+                  // Build the request
+                  const request: AnswerCodeQuestionRequest = {
+                    repo_id: currentRepoId,
+                    question,
+                    file,
+                    line,
+                    code,
+                    walkthrough: walkthroughStepsRef.current,
+                  };
+
+                  // Call the API asynchronously
+                  (async () => {
+                    try {
+                      console.log(
+                        `[answerCodeQuestion Tool] Calling API with request:`,
+                        request
+                      );
+                      const result = await answerCodeQuestion(request);
+                      console.log(
+                        `[answerCodeQuestion Tool] Received answer:`,
+                        result.answer
+                      );
+
+                      // Send the response back to the AI
+                      const response = {
+                        id: fc.id!,
+                        name: fc.name,
+                        response: {
+                          answer: result.answer,
+                          confidence: result.confidence,
+                          sources: result.sources,
+                        },
+                      };
+
+                      sessionPromise.then((session) =>
+                        (session as unknown as LiveSession).sendToolResponse({
+                          functionResponses: [response],
+                        })
+                      );
+                    } catch (error) {
+                      console.error(`[answerCodeQuestion Tool] Error:`, error);
+                      const errorResponse = {
+                        id: fc.id!,
+                        name: fc.name,
+                        response: {
+                          error: `Failed to get answer: ${
+                            (error as Error).message
+                          }`,
+                        },
+                      };
+
+                      sessionPromise.then((session) =>
+                        (session as unknown as LiveSession).sendToolResponse({
+                          functionResponses: [errorResponse],
+                        })
+                      );
+                    }
+                  })();
+                } else if (!currentRepoId) {
+                  functionResponses.push({
+                    id: fc.id!,
+                    name: fc.name,
+                    response: {
+                      error:
+                        "Repository not initialized. Please ensure you're on a GitHub repository page and the repository is indexed.",
+                    },
+                  });
+                } else {
+                  functionResponses.push({
+                    id: fc.id!,
+                    name: fc.name,
+                    response: {
+                      error: "Question is required to answer code question.",
                     },
                   });
                 }
@@ -1946,7 +2074,9 @@ const App: React.FC = () => {
               <span className="block sm:inline">{error}</span>
               <button
                 onClick={() => {
-                  setRepoStatus(RepoStatus.UNINITIALIZED);
+                  setRepoStatus(
+                    currentRepoId ? RepoStatus.READY : RepoStatus.UNINITIALIZED
+                  );
                   setError(null);
                 }}
                 className="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg"
