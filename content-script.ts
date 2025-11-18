@@ -199,21 +199,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         );
 
         for (const header of fileHeaders) {
-          const path =
-            header.getAttribute("data-path") || header.textContent || "";
+          const path = header.getAttribute("data-path");
+          const headerText = header.textContent || "";
+
           console.log(
-            `[Content Script] Checking file header: "${path}", looking for: "${fileName}"`
+            `[Content Script] Checking file header: data-path="${path}", text="${headerText}", looking for: "${fileName}"`
           );
 
-          // Check if this header contains the fileName
-          if (path.includes(fileName) || path.endsWith(fileName)) {
-            // Find the file container (usually a section or div after the header)
+          // Prefer data-path attribute for exact matching
+          if (path) {
+            // Check exact match or ends with (to handle paths)
+            if (
+              path === fileName ||
+              path.endsWith("/" + fileName) ||
+              path.endsWith(fileName)
+            ) {
+              fileContainer =
+                (header.closest("[data-testid='diff-file']") as HTMLElement) ||
+                (header.closest("section") as HTMLElement) ||
+                (header.parentElement as HTMLElement);
+              console.log(
+                `[Content Script] Found file container for ${fileName} via data-path`
+              );
+              break;
+            }
+          } else if (headerText.includes(fileName)) {
+            // Fallback to text matching if data-path not available
             fileContainer =
               (header.closest("[data-testid='diff-file']") as HTMLElement) ||
               (header.closest("section") as HTMLElement) ||
               (header.parentElement as HTMLElement);
             console.log(
-              `[Content Script] Found file container for ${fileName}`
+              `[Content Script] Found file container for ${fileName} via text`
             );
             break;
           }
@@ -367,25 +384,40 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // GitHub uses multiple comment button selectors
         let commentButton: HTMLElement | null = null;
 
-        // Strategy 1: aria-label with "Comment"
+        // Strategy 1: aria-label with "Comment" - most specific
         commentButton = row?.querySelector(
-          '[aria-label*="Comment"]'
+          'button[aria-label*="Comment"], [aria-label*="comment"]'
         ) as HTMLElement;
         if (commentButton) {
-          console.log("[Content Script] Found button via aria-label");
+          console.log(
+            "[Content Script] Found button via aria-label (most specific)"
+          );
         }
 
-        // Strategy 2: Class names
+        // Strategy 2: Look in the line gutter area specifically for comment buttons
         if (!commentButton) {
-          commentButton = row?.querySelector(
-            ".add-line-comment, .js-add-line-comment, button[aria-label*='comment'], [data-action*='comment']"
-          ) as HTMLElement;
-          if (commentButton) {
-            console.log("[Content Script] Found button via class/attribute");
+          const gutterArea = row?.querySelector(
+            '.js-line-menu, .diff-gutter-menu, [data-testid="diff-line-menu"]'
+          );
+          if (gutterArea) {
+            commentButton = gutterArea.querySelector("button") as HTMLElement;
+            if (commentButton) {
+              console.log("[Content Script] Found button in line gutter area");
+            }
           }
         }
 
-        // Strategy 3: Look for any button near the line
+        // Strategy 3: Class names - more specific selectors
+        if (!commentButton) {
+          commentButton = row?.querySelector(
+            ".add-line-comment, .js-add-line-comment, [data-action*='comment']"
+          ) as HTMLElement;
+          if (commentButton) {
+            console.log("[Content Script] Found button via class selector");
+          }
+        }
+
+        // Strategy 4: Look for any button with comment-related aria-label
         if (!commentButton) {
           const buttons = row?.querySelectorAll("button");
           if (buttons && buttons.length > 0) {
@@ -393,11 +425,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               const ariaLabel = btn.getAttribute("aria-label") || "";
               if (
                 ariaLabel.toLowerCase().includes("comment") ||
-                btn.className.includes("comment")
+                ariaLabel.toLowerCase().includes("add line")
               ) {
                 commentButton = btn as HTMLElement;
                 console.log(
-                  `[Content Script] Found button via button search: "${ariaLabel}"`
+                  `[Content Script] Found button via aria-label search: "${ariaLabel}"`
                 );
                 break;
               }
