@@ -21,6 +21,7 @@ import {
 
 // --- ENUMS & TYPES ---
 enum RepoStatus {
+  CHECKING,
   UNINITIALIZED,
   INDEXING,
   READY,
@@ -295,9 +296,13 @@ const WalkthroughStepItem: React.FC<{
         className="p-3 flex justify-between items-center cursor-pointer hover:bg-gray-700/30 rounded-t-lg"
       >
         <div className="flex items-start gap-3 overflow-hidden">
-          <span className="text-lg font-bold text-gray-500 flex-shrink-0">{index}.</span>
+          <span className="text-lg font-bold text-gray-500 flex-shrink-0">
+            {index}.
+          </span>
           <div className="overflow-hidden">
-            <span className="font-semibold text-blue-400 block overflow-hidden whitespace-nowrap text-ellipsis">{step.title}</span>
+            <span className="font-semibold text-blue-400 block overflow-hidden whitespace-nowrap text-ellipsis">
+              {step.title}
+            </span>
             <div className="text-xs text-gray-500 mt-1 font-mono flex items-center overflow-hidden">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -311,7 +316,9 @@ const WalkthroughStepItem: React.FC<{
                   clipRule="evenodd"
                 />
               </svg>
-              <span className="truncate">{step.file}:{step.lines}</span>
+              <span className="truncate">
+                {step.file}:{step.lines}
+              </span>
             </div>
           </div>
         </div>
@@ -576,9 +583,7 @@ const TranscriptionLog: React.FC<{
 
 const App: React.FC = () => {
   // --- STATE MANAGEMENT ---
-  const [repoStatus, setRepoStatus] = useState<RepoStatus>(
-    RepoStatus.UNINITIALIZED
-  );
+  const [repoStatus, setRepoStatus] = useState<RepoStatus>(RepoStatus.CHECKING);
   const [indexingProgress, setIndexingProgress] = useState(0);
   const [liveStatus, setLiveStatus] = useState<LiveStatus>(LiveStatus.IDLE);
   const [walkthroughSteps, setWalkthroughSteps] = useState<WalkthroughStep[]>(
@@ -1615,6 +1620,37 @@ const App: React.FC = () => {
 
   // --- RENDER LOGIC ---
 
+  const renderCheckingView = () => (
+    <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+      <div className="relative">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-16 w-16 text-blue-500 mb-4 animate-spin"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          ></circle>
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+          ></path>
+        </svg>
+      </div>
+      <h2 className="text-lg font-semibold text-gray-200">
+        Checking repository status...
+      </h2>
+      <p className="text-gray-400 mt-1 text-sm">Please wait a moment</p>
+    </div>
+  );
+
   const renderInitialView = () => (
     <div className="flex flex-col items-center justify-center h-full p-6 text-center">
       <svg
@@ -1889,6 +1925,8 @@ const App: React.FC = () => {
     }
 
     switch (repoStatus) {
+      case RepoStatus.CHECKING:
+        return renderCheckingView();
       case RepoStatus.UNINITIALIZED:
         return renderInitialView();
       case RepoStatus.INDEXING:
