@@ -156,12 +156,18 @@ export async function initRepository(
       body: JSON.stringify({ repo_url: repoUrl }),
     });
 
-    console.log("[API] 📡 Response received. Status:", response.status, response.statusText);
+    console.log(
+      "[API] 📡 Response received. Status:",
+      response.status,
+      response.statusText
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[API] ❌ Error response body:", errorText);
-      throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+      throw new Error(
+        `HTTP ${response.status}: ${response.statusText} - ${errorText}`
+      );
     }
 
     const data = await response.json();

@@ -823,11 +823,14 @@ const App: React.FC = () => {
           // Real initialization path - call API
           console.log("[App] 🌐 Calling initRepository API (real)...");
           console.time("[App] initRepository API call");
-          
+
           const initResponse = await initRepository(currentRepoUrl);
-          
+
           console.timeEnd("[App] initRepository API call");
-          console.log("[App] ✅ Repository initialization response:", initResponse);
+          console.log(
+            "[App] ✅ Repository initialization response:",
+            initResponse
+          );
 
           // Clear the progress animation interval
           clearInterval(progressInterval);
@@ -837,7 +840,9 @@ const App: React.FC = () => {
           }
 
           if (initResponse.status === "error") {
-            throw new Error(initResponse.error || "Repository initialization failed");
+            throw new Error(
+              initResponse.error || "Repository initialization failed"
+            );
           }
 
           if (initResponse.repo_id) {
@@ -854,9 +859,11 @@ const App: React.FC = () => {
           // Complete the progress UI
           setIndexingProgress(100);
           console.log("[App] ✅ Progress set to 100");
-          
+
           setRepoStatus(RepoStatus.READY);
-          console.log("[App] ✅ Repository indexing completed, setting READY status");
+          console.log(
+            "[App] ✅ Repository indexing completed, setting READY status"
+          );
         } catch (apiErr) {
           clearInterval(progressInterval);
           throw apiErr;

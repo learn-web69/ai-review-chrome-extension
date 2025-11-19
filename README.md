@@ -2,23 +2,44 @@
 
 An AI-powered code review assistant for GitHub repositories with live pair programming capabilities. This Chrome extension uses Google's Gemini AI to provide intelligent code analysis and interactive code reviews directly in your browser.
 
-## Features
-
-- 🤖 **AI-Powered Code Reviews**: Generate comprehensive code review walkthroughs
-- 🎯 **GitHub Integration**: Works seamlessly with GitHub repositories
-- 🎤 **Live Pair Programming**: Voice-enabled AI assistant that can see your screen
-- 🔍 **Smart Code Analysis**: Context-aware suggestions and explanations
-- 📋 **Side Panel Interface**: Clean UI that sits alongside GitHub pages
-- 🎨 **Beautiful Design**: Modern, dark-themed interface with smooth animations
-
 ## Installation
 
-### Prerequisites
+### Quick Start - Using Pre-built Extension (Recommended for Users)
+
+The easiest way to try the extension is to use the pre-built version:
+
+1. **Download the extension**
+
+   - Find and download `chrome-extension.zip` from this repository
+   - Extract the ZIP file to a folder on your computer
+
+2. **Load the extension in Chrome**
+
+   - Open Chrome and navigate to `chrome://extensions/`
+   - Enable "Developer mode" (toggle in the top-right corner)
+   - Click "Load unpacked"
+   - Select the extracted folder
+
+3. **Configure your API key**
+   - Navigate to any GitHub repository page
+   - Click the extension icon in the Chrome toolbar
+   - The side panel will open
+   - Click the settings icon (⚙️) in the header
+   - Enter your Gemini API key ([Get one here](https://aistudio.google.com/apikey)) and save
+
+> **Note on Developer Mode Installation**: For this hackathon project, we're distributing the extension as a local installation via Chrome's Developer Mode rather than publishing to the Chrome Web Store. This allows for rapid development and iteration without the typical 1-2 week review process required for official Chrome Web Store submission. Users can easily load the extension locally for testing and evaluation purposes.
+
+### Development Setup - Building from Source
+
+If you want to build and modify the extension yourself:
+
+#### Prerequisites
 
 - Google Chrome browser (version 114 or later for Side Panel API support)
+- Node.js and npm
 - Google Gemini API key ([Get one here](https://aistudio.google.com/apikey))
 
-### Steps
+#### Steps
 
 1. **Clone or download this repository**
 
@@ -49,6 +70,15 @@ An AI-powered code review assistant for GitHub repositories with live pair progr
    - The side panel will open
    - Click the settings icon (⚙️) in the header
    - Enter your Gemini API key and save
+
+## Features
+
+- 🤖 **AI-Powered Code Reviews**: Generate comprehensive code review walkthroughs
+- 🎯 **GitHub Integration**: Works seamlessly with GitHub repositories
+- 🎤 **Live Pair Programming**: Voice-enabled AI assistant that can see your screen
+- 🔍 **Smart Code Analysis**: Context-aware suggestions and explanations
+- 📋 **Side Panel Interface**: Clean UI that sits alongside GitHub pages
+- 🎨 **Beautiful Design**: Modern, dark-themed interface with smooth animations
 
 ## Usage
 
