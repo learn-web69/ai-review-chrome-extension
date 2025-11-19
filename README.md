@@ -195,6 +195,10 @@ This extension requires the following permissions:
 - **Google Gemini AI**: AI model (gemini-2.5-flash-native-audio-preview)
 - **Chrome Extension APIs**: Side Panel, Storage, Tabs
 
+## Related Projects
+
+- **Backend API**: [code-review-ai](https://github.com/learn-web69/code-review-ai) - The backend service powering the AI code review functionality
+
 ## License
 
 MIT License - feel free to use and modify as needed.
