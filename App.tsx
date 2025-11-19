@@ -1101,6 +1101,29 @@ const App: React.FC = () => {
     try {
       console.log("[🎬 startLiveConnection] 🟢 Starting live connection...");
 
+      // Pre-flight check: Request microphone permission first
+      console.log(
+        "[Live Session] Pre-flight: Requesting microphone permission..."
+      );
+      try {
+        const testStream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        testStream.getTracks().forEach((track) => track.stop());
+        console.log("[Live Session] ✅ Microphone permission granted");
+      } catch (permError) {
+        console.error(
+          "[Live Session] ❌ Microphone permission denied:",
+          permError
+        );
+        setError(
+          "Microphone permission is required for live pair programming. Please allow microphone access when prompted."
+        );
+        setLiveStatus(LiveStatus.IDLE);
+        setRepoStatus(RepoStatus.READY);
+        return;
+      }
+
       if (
         !inputAudioContextRef.current ||
         inputAudioContextRef.current.state === "closed"
