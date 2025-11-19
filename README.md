@@ -2,6 +2,32 @@
 
 An AI-powered code review assistant for GitHub repositories with live pair programming capabilities. This Chrome extension uses Google's Gemini AI to provide intelligent code analysis and interactive code reviews directly in your browser.
 
+## Getting Your Gemini API Key
+
+Before installing the extension, you'll need a free Google Gemini API key. Here's how to get one:
+
+1. **Visit Google AI Studio**
+
+   - Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+   - Sign in with your Google account (create one if needed - it's free)
+
+2. **Create an API Key**
+
+   - Click on "Create API key" button
+   - Select "Create API key in new project"
+   - Your API key will be generated and displayed
+
+3. **Copy Your Key**
+
+   - Click the copy icon next to your API key
+   - Keep it safe - you'll need it to configure the extension
+
+4. **Enable the Generative Language API** (if needed)
+   - The API should be automatically enabled
+   - If you encounter errors, visit the [Google Cloud Console](https://console.cloud.google.com) and enable the "Generative Language API"
+
+> **Note**: The free tier of Gemini API is very generous and should be more than enough for hackathon use and personal testing. Visit [Google AI Pricing](https://ai.google.dev/pricing) to see current limits.
+
 ## Installation
 
 ### Quick Start - Using Pre-built Extension (Recommended for Users)
