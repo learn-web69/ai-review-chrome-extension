@@ -144,19 +144,33 @@ export async function initRepository(
 ): Promise<InitRepositoryResponse> {
   const url = `${API_BASE_URL}/init-repository`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ repo_url: repoUrl }),
-  });
+  console.log("[API] 🌐 Making POST request to:", url);
+  console.log("[API] 📦 Payload:", { repo_url: repoUrl });
 
-  if (!response.ok) {
-    throw new Error(`Failed to initialize repository: ${response.statusText}`);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ repo_url: repoUrl }),
+    });
+
+    console.log("[API] 📡 Response received. Status:", response.status, response.statusText);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[API] ❌ Error response body:", errorText);
+      throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log("[API] ✅ Successfully parsed response:", data);
+    return data;
+  } catch (error) {
+    console.error("[API] ❌ Fetch error:", error);
+    throw error;
   }
-
-  return response.json();
 }
 
 /**

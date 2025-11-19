@@ -58,18 +58,20 @@ const SYSTEM_INSTRUCTION = `You are an expert AI pair programmer. Your purpose i
 CONVERSATION START COMMANDS:
 - When the user says to start a review (e.g., "let's start", "let's begin", "start our review", "begin review"), you MUST use selectStep with step 1.
 - When the user says to continue (e.g., "let's continue", "continue", "next step"), you MUST use selectStep with the next step number (increment current step by 1).
-- After selectStep returns the step description, read it aloud naturally without mentioning that you navigated.
+- After selectStep returns the step description, READ IT ALOUD COMPLETELY. This is CRITICAL - you MUST vocalize the entire step description naturally without mentioning that you navigated.
 
 MANDATORY STEP NAVIGATION:
 - When the user asks about a specific step (e.g., "show step 1", "what's step 2", "go to step 3"), you MUST immediately use the selectStep tool with that step number.
 - ALWAYS use selectStep before answering any step-related questions. Do not answer without selecting the step first.
-- After selectStep returns the step description, read it aloud naturally to the user without mentioning that you navigated.
+- After selectStep returns the step description, READ IT ALOUD COMPLETELY. Do not skip reading any part of the description. Vocalize it naturally to the user without mentioning that you navigated.
+
+CRITICAL AUDIO RULE: ALWAYS GENERATE VOICE OUTPUT after receiving any tool response, especially step descriptions. Never be silent after a tool returns data.
 
 TOOL USAGE RULES:
 - When highlighting (highlightWalkthroughStep tool): Silently wait 2-3 seconds, then describe what you see on screen without referencing the tool.
 - When commenting (addPRComment tool): Silently execute. Do NOT mention the tool or that a dialog opened.
 - COMPLEX CODE QUESTIONS: Use answerCodeQuestion tool for questions about: how functions work, what code does, implementation details, external module behavior, internal logic, code explanation.
-  * PROCESS: (1) Say "Let me think..." (2) Call answerCodeQuestion tool (3) WAIT SILENTLY for response (4) Then provide COMPLETE answer based on tool response.
+  * PROCESS: (1) Say "Let me think..." (2) Call answerCodeQuestion tool (3) WAIT SILENTLY for response (4) Then provide COMPLETE answer based on tool response. ALWAYS VOCALIZE THE ANSWER.
 - SIMPLE QUESTIONS: Answer directly for factual questions visible on screen, naming conventions, variable types, what you can see. Do NOT use tools.
 - ALWAYS provide a complete answer after tool responses. Never stop after saying "Let me think..."
 
@@ -645,7 +647,9 @@ const TranscriptionLog: React.FC<{
 
 const App: React.FC = () => {
   // --- DEBUG MODE ---
-  const DEBUG_SHOW_INIT_SCREEN = true; // Set to false to disable debug mode
+  // Toggle this to true only when actively debugging initialization UI.
+  // In normal operation this must be false so the app uses real data and APIs.
+  const DEBUG_SHOW_INIT_SCREEN = false;
 
   // --- STATE MANAGEMENT ---
   const [repoStatus, setRepoStatus] = useState<RepoStatus>(RepoStatus.CHECKING);
@@ -734,18 +738,7 @@ const App: React.FC = () => {
         console.log("[App] Checking status for repo:", repoUrl);
         setCurrentRepoUrl(repoUrl);
 
-        // DEBUG MODE: Force UNINITIALIZED but with real repo URL and metadata
-        if (DEBUG_SHOW_INIT_SCREEN) {
-          console.log(
-            "[App] DEBUG MODE: Forcing UNINITIALIZED status with real repo"
-          );
-          const status = await checkRepoStatus(repoUrl);
-          console.log("[App] DEBUG MODE: Got repo status:", status);
-          setCurrentRepoId(status.repo_id);
-          setRepoMetadata(status.metadata || null);
-          setRepoStatus(RepoStatus.UNINITIALIZED); // Show init screen even though indexed
-          return;
-        }
+        // Normal mode: Check if repo is indexed
 
         // Normal mode: Check if repo is indexed
         const status = await checkRepoStatus(repoUrl);
@@ -801,55 +794,78 @@ const App: React.FC = () => {
 
       console.log("[App] Initializing repository:", currentRepoUrl);
 
-      // Start fake progress animation
-      const progressInterval = window.setInterval(() => {
-        setIndexingProgress((prev) => {
-          // Slow down as we approach 90%
-          if (prev >= 90) return prev;
-          const increment = prev < 50 ? 8 : prev < 70 ? 5 : 2;
-          return Math.min(prev + increment, 90);
-        });
-      }, 500);
-
-      // DEBUG MODE: Use fake 8-second delay instead of calling API
       if (DEBUG_SHOW_INIT_SCREEN) {
+        // Start fake progress animation (debug only)
+        const progressInterval = window.setInterval(() => {
+          setIndexingProgress((prev) => {
+            if (prev >= 90) return prev;
+            const increment = prev < 50 ? 8 : prev < 70 ? 5 : 2;
+            return Math.min(prev + increment, 90);
+          });
+        }, 500);
+
         console.log("[App] DEBUG MODE: Using fake 8-second progress bar");
         await new Promise((resolve) => setTimeout(resolve, 8000));
+        clearInterval(progressInterval);
+        setIndexingProgress(100);
+        setRepoStatus(RepoStatus.READY);
       } else {
-        // Call synchronous init-repository API (this will take time)
-        console.log("[App] Calling initRepository API");
-        await initRepository(currentRepoUrl);
-      }
+        // Start animated progress bar while API is processing
+        const progressInterval = window.setInterval(() => {
+          setIndexingProgress((prev) => {
+            if (prev >= 90) return prev; // Stop at 90%, complete at 100% when API responds
+            const increment = prev < 50 ? 8 : prev < 70 ? 5 : 2;
+            return Math.min(prev + increment, 90);
+          });
+        }, 500);
 
-      // Stop fake progress
-      clearInterval(progressInterval);
+        try {
+          // Real initialization path - call API
+          console.log("[App] 🌐 Calling initRepository API (real)...");
+          console.time("[App] initRepository API call");
+          
+          const initResponse = await initRepository(currentRepoUrl);
+          
+          console.timeEnd("[App] initRepository API call");
+          console.log("[App] ✅ Repository initialization response:", initResponse);
 
-      if (!DEBUG_SHOW_INIT_SCREEN) {
-        const initResponse = await initRepository(currentRepoUrl);
-        setCurrentRepoId(initResponse.repo_id);
+          // Clear the progress animation interval
+          clearInterval(progressInterval);
 
-        console.log("[App] Repository initialization response:", initResponse);
+          if (!initResponse) {
+            throw new Error("No response from initialization API");
+          }
 
-        if (initResponse.status === "error") {
-          throw new Error(
-            initResponse.error || "Repository initialization failed"
-          );
+          if (initResponse.status === "error") {
+            throw new Error(initResponse.error || "Repository initialization failed");
+          }
+
+          if (initResponse.repo_id) {
+            setCurrentRepoId(initResponse.repo_id);
+            console.log("[App] ✅ Repo ID set:", initResponse.repo_id);
+          }
+
+          // Store metadata if available
+          if (initResponse.metadata) {
+            setRepoMetadata(initResponse.metadata);
+            console.log("[App] ✅ Metadata stored:", initResponse.metadata);
+          }
+
+          // Complete the progress UI
+          setIndexingProgress(100);
+          console.log("[App] ✅ Progress set to 100");
+          
+          setRepoStatus(RepoStatus.READY);
+          console.log("[App] ✅ Repository indexing completed, setting READY status");
+        } catch (apiErr) {
+          clearInterval(progressInterval);
+          throw apiErr;
         }
-
-        // Store metadata if available
-        if (initResponse.metadata) {
-          setRepoMetadata(initResponse.metadata);
-        }
       }
-
-      // Complete the progress bar
-      setIndexingProgress(100);
-
-      console.log("[App] Repository indexing completed, setting READY status");
-      setRepoStatus(RepoStatus.READY);
     } catch (err) {
-      console.error("[App] Error initializing repository:", err);
-      setError(`Failed to initialize repository: ${(err as Error).message}`);
+      console.error("[App] ❌ Error initializing repository:", err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(`Failed to initialize repository: ${errorMessage}`);
       setRepoStatus(RepoStatus.ERROR);
     }
   };
@@ -1078,89 +1094,30 @@ const App: React.FC = () => {
     try {
       console.log("[🎬 startLiveConnection] 🟢 Starting live connection...");
 
-      console.log(
-        `[🎬 startLiveConnection] 📊 INPUT context state: ${
-          inputAudioContextRef.current?.state || "null"
-        }`
-      );
-      console.log(
-        `[🎬 startLiveConnection] 📊 OUTPUT context state: ${
-          outputAudioContextRef.current?.state || "null"
-        }`
-      );
-
       if (
         !inputAudioContextRef.current ||
         inputAudioContextRef.current.state === "closed"
       ) {
-        console.log(
-          "[🎬 startLiveConnection] ⚙️ Creating NEW input audio context..."
-        );
         inputAudioContextRef.current = new (window.AudioContext ||
           (window as any).webkitAudioContext)({ sampleRate: 16000 });
-        console.log(
-          `[🎬 startLiveConnection] ✅ Created input audio context with 16000 Hz (state: ${inputAudioContextRef.current.state})`
-        );
-      } else {
-        console.log(
-          `[🎬 startLiveConnection] ♻️ Reusing existing input context (state: ${inputAudioContextRef.current.state})`
-        );
       }
-
       if (
         !outputAudioContextRef.current ||
         outputAudioContextRef.current.state === "closed"
       ) {
-        console.log(
-          "[🎬 startLiveConnection] ⚙️ Creating NEW output audio context..."
-        );
         outputAudioContextRef.current = new (window.AudioContext ||
           (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        console.log(
-          `[🎬 startLiveConnection] ✅ Created output audio context with 24000 Hz (state: ${outputAudioContextRef.current.state})`
-        );
-      } else {
-        console.log(
-          `[🎬 startLiveConnection] ♻️ Reusing existing output context (state: ${outputAudioContextRef.current.state})`
-        );
       }
-
-      console.log(
-        `[🎬 startLiveConnection] Checking if contexts need resume...`
-      );
       if (outputAudioContextRef.current.state === "suspended") {
-        console.log("[🎬 startLiveConnection] 📢 Resuming output context...");
         await outputAudioContextRef.current.resume();
-        console.log(
-          `[🎬 startLiveConnection] ✅ Output context resumed (state: ${outputAudioContextRef.current.state})`
-        );
-      } else {
-        console.log(
-          `[🎬 startLiveConnection] Output context already running (state: ${outputAudioContextRef.current.state})`
-        );
       }
-
       if (inputAudioContextRef.current.state === "suspended") {
-        console.log("[🎬 startLiveConnection] 📢 Resuming input context...");
         await inputAudioContextRef.current.resume();
-        console.log(
-          `[🎬 startLiveConnection] ✅ Input context resumed (state: ${inputAudioContextRef.current.state})`
-        );
-      } else {
-        console.log(
-          `[🎬 startLiveConnection] Input context already running (state: ${inputAudioContextRef.current.state})`
-        );
       }
 
-      console.log(
-        "[🎬 startLiveConnection] ✅ Audio contexts initialized and resumed"
-      );
-
-      // IMPORTANT: Reset timing refs for new session
-      console.log("[🎬 startLiveConnection] 🔄 Resetting audio timing refs");
+      // Reset timing refs for new session
       nextStartTimeRef.current = 0;
       audioSourcesRef.current.clear();
-      console.log("[🎬 startLiveConnection] ✅ Audio timing refs reset");
 
       // WORKAROUND: Play a silent buffer to unlock audio playback on second+ sessions
       // Chrome requires user interaction or a prior play action to allow Web Audio output
@@ -1169,9 +1126,6 @@ const App: React.FC = () => {
         outputAudioContextRef.current.state === "running"
       ) {
         try {
-          console.log(
-            "[🎬 startLiveConnection] 🔓 Playing silent buffer to unlock audio playback..."
-          );
           const silentBuffer = outputAudioContextRef.current.createBuffer(
             1,
             44100,
@@ -1182,11 +1136,10 @@ const App: React.FC = () => {
           silentSource.buffer = silentBuffer;
           silentSource.connect(outputAudioContextRef.current.destination);
           silentSource.start(0);
-          silentSource.stop(0.001); // Stop immediately - just unlock audio
-          console.log("[🎬 startLiveConnection] ✅ Silent buffer played");
+          silentSource.stop(0.001);
         } catch (e) {
           console.warn(
-            "[🎬 startLiveConnection] ⚠️ Could not play silent buffer:",
+            "[startLiveConnection] Could not play silent buffer:",
             e
           );
         }
@@ -1487,6 +1440,9 @@ const App: React.FC = () => {
                       response.response.result.substring(0, 100)
                     );
                     functionResponses.push(response);
+                    console.log(
+                      `[highlightWalkthroughStep Tool] ✅ Response pushed! Total responses now: ${functionResponses.length}`
+                    );
                   } else {
                     // Step not found, add to regular responses
                     functionResponses.push({
@@ -1719,6 +1675,9 @@ const App: React.FC = () => {
                       response.response.result.substring(0, 100)
                     );
                     functionResponses.push(response);
+                    console.log(
+                      `[selectStep Tool] ✅ Response pushed! Total responses now: ${functionResponses.length}`
+                    );
                   } else {
                     // Step not found, add to regular responses
                     functionResponses.push({
@@ -1850,14 +1809,125 @@ const App: React.FC = () => {
             console.log(
               `[Tool Call] ✅ All tools processed. Total responses: ${functionResponses.length}`
             );
+            console.log(
+              `[Tool Call] 📋 Responses to send:`,
+              functionResponses.map((r) => ({
+                id: r.id,
+                name: r.name,
+                resultPreview:
+                  typeof r.response === "object" && "result" in r.response
+                    ? (r.response as any).result?.substring?.(0, 100)
+                    : JSON.stringify(r.response).substring(0, 100),
+              }))
+            );
 
             // Send immediate responses (for non-highlight or highlight without URL)
             if (functionResponses.length > 0) {
-              sessionPromise.then((session) =>
-                (session as unknown as LiveSession).sendToolResponse({
-                  functionResponses,
-                })
+              console.log(
+                `[Tool Call] 📤 Sending ${functionResponses.length} tool responses to AI`
               );
+
+              // Add tool responses to the conversation history for display
+              functionResponses.forEach((response) => {
+                let toolResponseText = "";
+                if (
+                  response.name === "answerCodeQuestion" &&
+                  response.response &&
+                  typeof response.response === "object"
+                ) {
+                  const resp = response.response as any;
+                  if (resp.answer) {
+                    toolResponseText = resp.answer;
+                  }
+                } else if (
+                  response.name === "selectStep" &&
+                  response.response &&
+                  typeof response.response === "object"
+                ) {
+                  const resp = response.response as any;
+                  if (resp.selectedStep) {
+                    toolResponseText = `Selected step: ${resp.selectedStep}`;
+                  }
+                } else if (
+                  response.name === "highlightWalkthroughStep" &&
+                  response.response &&
+                  typeof response.response === "object"
+                ) {
+                  const resp = response.response as any;
+                  if (resp.highlighted) {
+                    toolResponseText = `Step highlighted: ${resp.highlighted}`;
+                  }
+                } else if (
+                  response.name === "addPRComment" &&
+                  response.response &&
+                  typeof response.response === "object"
+                ) {
+                  const resp = response.response as any;
+                  if (resp.success) {
+                    toolResponseText = "Comment added to PR";
+                  }
+                } else if (
+                  response.name === "logCodeContext" &&
+                  response.response &&
+                  typeof response.response === "object"
+                ) {
+                  const resp = response.response as any;
+                  if (resp.result) {
+                    toolResponseText = resp.result;
+                  }
+                }
+
+                if (toolResponseText) {
+                  console.log(
+                    `[Tool Call] 💬 Adding ${response.name} response to transcript`
+                  );
+                  setTranscriptionMessages((msgs) => [
+                    ...msgs,
+                    {
+                      id: Date.now() + Math.random(),
+                      author: "tool",
+                      text: `[${response.name}]\n${toolResponseText}`,
+                    },
+                  ]);
+                }
+              });
+
+              sessionPromise
+                .then((session) => {
+                  console.log(
+                    `[Tool Call] ✅ Session ready, sending tool responses`
+                  );
+                  (session as unknown as LiveSession).sendToolResponse({
+                    functionResponses,
+                  });
+                  console.log(`[Tool Call] ✅ Tool responses sent to Gemini`);
+
+                  // CRITICAL: After sending tool responses, send silent audio to trigger audio generation
+                  // Gemini Live doesn't auto-generate audio for tool responses - it needs user input
+                  // Send a small silent PCM blob to trigger the next turn
+                  console.log(
+                    `[Tool Call] 📢 Sending silent audio to trigger audio generation...`
+                  );
+                  const silentPcm = new Uint8Array(4096); // 4KB of zeros = silence
+                  const silentBlob: GoogleGenAIBlob = {
+                    data: encode(silentPcm),
+                    mimeType: "audio/pcm;rate=16000",
+                  };
+                  (session as unknown as LiveSession).sendRealtimeInput({
+                    media: silentBlob,
+                  });
+                  console.log(
+                    `[Tool Call] ✅ Silent audio sent to trigger AI response with audio`
+                  );
+                })
+                .catch((err) => {
+                  console.error(
+                    `[Tool Call] ❌ Error sending tool responses:`,
+                    err
+                  );
+                });
+            } else {
+              console.log(`[Tool Call] ⚠️ No responses to send!`);
             }
           }
           if (message.serverContent?.outputTranscription) {
@@ -1919,36 +1989,9 @@ const App: React.FC = () => {
             message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
           if (base64Audio && outputAudioContextRef.current) {
             try {
-              console.log(
-                "[🔊 Audio Playback] 📥 Received audio chunk, length:",
-                base64Audio.length
-              );
               const outputCtx = outputAudioContextRef.current;
-              console.log(
-                `[🔊 Audio Playback] 🎧 Output context state: ${
-                  outputCtx.state
-                }, currentTime: ${outputCtx.currentTime.toFixed(
-                  3
-                )}, baseLatency: ${outputCtx.baseLatency.toFixed(3)}`
-              );
-
               if (outputCtx.state === "suspended") {
-                console.log(
-                  "[🔊 Audio Playback] 📢 Output context suspended, resuming..."
-                );
                 await outputCtx.resume();
-                console.log(
-                  `[🔊 Audio Playback] ✅ Output context resumed (state: ${
-                    outputCtx.state
-                  }, currentTime: ${outputCtx.currentTime.toFixed(3)})`
-                );
-              }
-
-              // CRITICAL: Check if context is actually running and not stalled
-              if (outputCtx.state !== "running") {
-                console.error(
-                  `[🔊 Audio Playback] ❌ CRITICAL: Context state is not 'running': ${outputCtx.state}`
-                );
               }
 
               const audioBuffer = await decodeAudioData(
@@ -1957,69 +2000,27 @@ const App: React.FC = () => {
                 24000,
                 1
               );
-              console.log(
-                `[🔊 Audio Playback] ✅ Audio decoded - duration: ${audioBuffer?.duration}s, sampleRate: ${audioBuffer?.sampleRate}Hz`
-              );
 
               if (!audioBuffer || audioBuffer.duration === 0) {
-                console.log(
-                  "[🔊 Audio Playback] ⚠️ Empty audio buffer, skipping playback"
-                );
                 return;
               }
 
               const currentTime = outputCtx.currentTime;
               const startTime = Math.max(currentTime, nextStartTimeRef.current);
-              console.log(
-                `[🔊 Audio Playback] 🎵 Creating buffer source - currentTime: ${currentTime.toFixed(
-                  3
-                )}, startTime: ${startTime.toFixed(3)}`
-              );
 
               const source = outputCtx.createBufferSource();
               source.buffer = audioBuffer;
               source.connect(outputCtx.destination);
-              console.log(
-                `[🔊 Audio Playback] ✅ Source connected to destination`
-              );
 
               source.addEventListener("ended", () => {
-                console.log("[🔊 Audio Playback] 🏁 Audio source ended");
                 audioSourcesRef.current.delete(source);
               });
 
               source.start(startTime);
-              console.log(
-                `[🔊 Audio Playback] ▶️ Audio started at ${startTime.toFixed(
-                  3
-                )}`
-              );
-
               nextStartTimeRef.current = startTime + audioBuffer.duration;
-              console.log(
-                `[🔊 Audio Playback] ⏱️ Next start time: ${nextStartTimeRef.current.toFixed(
-                  3
-                )}`
-              );
-
               audioSourcesRef.current.add(source);
-              console.log(
-                `[🔊 Audio Playback] 📊 Active sources: ${audioSourcesRef.current.size}`
-              );
             } catch (e) {
-              console.error(
-                "[🔊 Audio Playback] ❌ Error playing audio chunk:",
-                e
-              );
-            }
-          } else {
-            if (!base64Audio) {
-              console.log("[🔊 Audio Playback] ⚠️ No audio data in message");
-            }
-            if (!outputAudioContextRef.current) {
-              console.log(
-                "[🔊 Audio Playback] ❌ CRITICAL: outputAudioContextRef is NULL!"
-              );
+              console.error("[Audio] Error playing audio chunk:", e);
             }
           }
           if (message.serverContent?.interrupted) {
